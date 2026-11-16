@@ -105,3 +105,18 @@ def test_build_task_price_and_key_rules():
     t = build_task(W)
     for s in ["管理費", "shipping", "敷金", "item_key"]:
         assert s in t, s
+
+
+async def test_run_watch_passes_context_cap(monkeypatch):
+    seen = {}
+
+    class CapAgent:
+        def __init__(self, *a, **k): seen.update(k)
+        async def run(self, *a, **k): raise RuntimeError("stop")
+
+    monkeypatch.setattr(agent_mod, "Agent", CapAgent)
+    monkeypatch.setattr(agent_mod, "Browser", lambda *a, **k: None)
+    await run_watch(W, llm=object(), max_context_chars=60000)
+    assert seen["max_context_chars"] == 60000
+    await run_watch(W, llm=object())
+    assert seen["max_context_chars"] is None

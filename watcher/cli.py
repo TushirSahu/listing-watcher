@@ -28,17 +28,21 @@ def due(watches: list[Watch], store: Store, now: datetime) -> list[Watch]:
 
 
 async def run_due(watches: list[Watch], store: Store, llm: object, now: datetime, headless: bool,
-                  send: Callable[[str], bool]) -> None:
+                  send: Callable[[str], bool], max_context_chars: int | None = None) -> None:
     for w in due(watches, store, now):
-        process(w, await run_watch(w, llm, headless=headless), store, send=send)
+        result = await run_watch(w, llm, headless=headless, max_context_chars=max_context_chars)
+        process(w, result, store, send=send)
         store.set_last_run(w.name, now)
 
 
-def _setup(config: str) -> tuple[list[Watch], object]:
+def _setup(config: str) -> tuple[list[Watch], object, int | None]:
     load_dotenv(Path.cwd() / ".env")
     watches = load_watches(Path(config))
     llm = make_llm(os.environ.get("LLM_PROVIDER", ""), os.environ.get("LLM_MODEL", ""), os.environ)
-    return watches, llm
+    cap = os.environ.get("LLM_MAX_CONTEXT_CHARS", "").strip()
+    if cap and not (cap.isdigit() and int(cap) > 0):
+        raise ConfigError(f"LLM_MAX_CONTEXT_CHARS must be a positive number (got {cap!r})")
+    return watches, llm, int(cap) if cap else None
 
 
 def _print_result(result) -> None:
@@ -50,13 +54,13 @@ def _print_result(result) -> None:
               f"{item.title} - {price}\n  {item.why_matches}\n  id: {item.item_key or '-'}\n  {item.url}")
 
 
-async def _loop(watches, store, llm, headless) -> None:
+async def _loop(watches, store, llm, headless, cap) -> None:
     token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     send = lambda text: send_message(text, token, chat_id)
     names = ", ".join(w.name for w in watches)
     print(f"watching {len(watches)} watch(es): {names}. Ctrl+C to stop.")
     while True:
-        await run_due(watches, store, llm, datetime.now(), headless, send)
+        await run_due(watches, store, llm, datetime.now(), headless, send, max_context_chars=cap)
         await asyncio.sleep(TICK_SECONDS)
 
 
@@ -74,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger("browser_use").setLevel(logging.WARNING)  # hide per-step agent logs
 
     try:
-        watches, llm = _setup(args.config)
+        watches, llm, cap = _setup(args.config)
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
@@ -85,11 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         if watch is None:
             print(f"config error: no watch named {args.name!r}", file=sys.stderr)
             return 2
-        _print_result(asyncio.run(run_watch(watch, llm, headless=headless)))
+        _print_result(asyncio.run(run_watch(watch, llm, headless=headless, max_context_chars=cap)))
         return 0
 
     try:
-        asyncio.run(_loop(watches, Store(args.db), llm, headless))
+        asyncio.run(_loop(watches, Store(args.db), llm, headless, cap))
     except KeyboardInterrupt:
         print("stopped")
     return 0

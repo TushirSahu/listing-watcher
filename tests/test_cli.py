@@ -29,7 +29,7 @@ async def test_run_due_failed_send_retries_listing(monkeypatch):
 
     item = Listing(url="https://x.jp/1", title="Sony", price=1, why_matches="fits", matches=True, verified=True)
 
-    async def fake_run(watch, llm, headless=True):
+    async def fake_run(watch, llm, headless=True, max_context_chars=None):
         return RunResult(searched=True, listings_seen=1, blocked_or_lost=False, note="", listings=[item])
 
     monkeypatch.setattr(cli, "run_watch", fake_run)
@@ -41,7 +41,7 @@ async def test_run_due_failed_send_retries_listing(monkeypatch):
 
 def _env(monkeypatch, tmp_path, **env):
     monkeypatch.chdir(tmp_path)
-    for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY"):
+    for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_MAX_CONTEXT_CHARS"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, v)
@@ -73,7 +73,7 @@ def test_check_prints_and_does_not_store(monkeypatch, tmp_path, capsys):
     _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
     (tmp_path / "w.yaml").write_text(GOOD_YAML)
 
-    async def fake_run(watch, llm, headless=True):
+    async def fake_run(watch, llm, headless=True, max_context_chars=None):
         return RunResult.model_validate({"searched": True, "listings_seen": 1, "blocked_or_lost": False, "note": "",
                                          "listings": [{"url": "https://x.jp/1", "title": "Sony", "price": 100,
                                                        "why_matches": "fits", "matches": True, "verified": True, "item_key": "Maison A 3F"}]})
@@ -83,3 +83,26 @@ def test_check_prints_and_does_not_store(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Sony" in out and "https://x.jp/1" in out and "Maison A 3F" in out
     assert not list(tmp_path.glob("*.db"))
+
+
+def test_check_passes_context_cap(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k",
+         LLM_MAX_CONTEXT_CHARS="60000")
+    (tmp_path / "w.yaml").write_text(GOOD_YAML)
+    seen = {}
+
+    async def fake_run(watch, llm, headless=True, max_context_chars=None):
+        seen["cap"] = max_context_chars
+        return RunResult(searched=True, listings_seen=0, blocked_or_lost=False, note="", listings=[])
+
+    monkeypatch.setattr(cli, "run_watch", fake_run)
+    assert main(["check", "a", "--config", str(tmp_path / "w.yaml")]) == 0
+    assert seen["cap"] == 60000
+
+
+def test_bad_context_cap_exit_2(monkeypatch, tmp_path, capsys):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k",
+         LLM_MAX_CONTEXT_CHARS="lots")
+    (tmp_path / "w.yaml").write_text(GOOD_YAML)
+    assert main(["check", "a", "--config", str(tmp_path / "w.yaml")]) == 2
+    assert "LLM_MAX_CONTEXT_CHARS" in capsys.readouterr().err

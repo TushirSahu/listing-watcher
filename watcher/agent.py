@@ -66,7 +66,8 @@ def build_task(watch: Watch) -> str:
     return "\n".join(lines)
 
 
-async def run_watch(watch: Watch, llm: object, headless: bool = True) -> RunResult:
+async def run_watch(watch: Watch, llm: object, headless: bool = True,
+                    max_context_chars: int | None = None) -> RunResult:
     browser = None
     try:
         browser = Browser("chromium", headless=headless)
@@ -76,6 +77,7 @@ async def run_watch(watch: Watch, llm: object, headless: bool = True) -> RunResu
             browser=browser,
             output_model_schema=RunResult,
             judge=False,  # skip extra judge LLM call: we judge listings ourselves
+            max_context_chars=max_context_chars,  # cap tokens per step (free-tier token limits)
         )
         history = await agent.run(max_steps=max_steps(watch))
         out = history.structured_output

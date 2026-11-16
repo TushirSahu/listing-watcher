@@ -70,7 +70,7 @@ How it handles rentals (and any other site):
 
 Each check is one agent run of up to `15 + 4 × open_listings` browser steps, each an LLM call. A small, fast model (Haiku / mini / Flash class) is enough. Lower `open_listings` or raise `every` to spend less.
 
-**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google`, `LLM_MODEL=gemini-flash-lite-latest`. The free tier allows only a few requests per minute per model (5/min on `gemini-2.5-flash` at time of writing), and the agent makes one request per browser step, so non-lite models often fail with `429 quota exceeded`. Lite models work, and a check takes a few minutes.
+**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google`, `LLM_MODEL=gemini-flash-lite-latest`. The free tier allows only a few requests per minute per model (5/min on `gemini-2.5-flash` at time of writing), and the agent makes one request per browser step, so non-lite models often fail with `429 quota exceeded`. Lite models work, and a check takes a few minutes. Big pages (SUUMO) can also hit the tokens-per-minute limit: set `LLM_MAX_CONTEXT_CHARS=60000` in `.env`.
 
 **Ollama is best-effort.** Small local models often get lost on real sites. Use a capable model and expect failures.
 
