@@ -117,3 +117,27 @@ def test_unverified_marked():
     started(s)
     [m] = process(W, ok(lst("https://x.jp/2", 100, verified=False, title="Sony")), s)
     assert m.splitlines()[0] == "[w] new: Sony - ¥100 (unverified)"
+
+
+def test_url_normalization_variants():
+    base = "https://jp.mercari.com"
+    want = "https://jp.mercari.com/item/m1"
+    assert normalize_url("/item/m1", base) == want
+    assert normalize_url("https://JP.Mercari.com/item/m1", base) == want
+    assert normalize_url("https://jp.mercari.com/item/m1?gclid=1&fbclid=2&ref=x&afid=9", base) == want
+    assert normalize_url("https://x.jp/s?b=1&a=2") == normalize_url("https://x.jp/s?a=2&b=1")
+
+
+def test_relative_url_dedupes_against_absolute():
+    s = Store(":memory:")
+    w = Watch(name="w", site="https://jp.mercari.com", want="t", max_price=None, every=timedelta(hours=2))
+    started(s, lst("https://jp.mercari.com/item/m1", 100), watch=w)
+    assert process(w, ok(lst("/item/m1", 100)), s) == []
+
+
+def test_failed_send_not_recorded_retries_next_run():
+    s = Store(":memory:")
+    started(s)
+    process(W, ok(lst("https://x.jp/2", 100)), s, send=lambda text: False)
+    assert not s.seen("w", "https://x.jp/2")
+    assert len(process(W, ok(lst("https://x.jp/2", 100)), s)) == 1

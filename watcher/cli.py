@@ -12,7 +12,7 @@ from watcher.agent import make_llm, run_watch
 from watcher.config import ConfigError, Watch, load_watches
 from watcher.decide import process
 from watcher.models import failed_result
-from watcher.notify import notify
+from watcher.notify import send_message
 from watcher.store import Store
 
 TICK_SECONDS = 60
@@ -28,13 +28,13 @@ def due(watches: list[Watch], store: Store, now: datetime) -> list[Watch]:
 
 
 async def run_due(watches: list[Watch], store: Store, llm: object, now: datetime, headless: bool,
-                  send: Callable[[list[str]], None]) -> None:
+                  send: Callable[[str], bool]) -> None:
     for w in due(watches, store, now):
         try:
             result = await run_watch(w, llm, headless=headless)
         except Exception as e:  # run_watch shouldn't raise; never let one watch stop the rest
             result = failed_result(f"{type(e).__name__}: {e}")
-        send(process(w, result, store))
+        process(w, result, store, send=send)
         store.set_last_run(w.name, now)
 
 
@@ -55,7 +55,8 @@ def _print_result(result) -> None:
 
 
 async def _loop(watches, store, llm, headless) -> None:
-    send = lambda msgs: notify(msgs, os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID"))
+    token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    send = lambda text: send_message(text, token, chat_id)
     names = ", ".join(w.name for w in watches)
     print(f"watching {len(watches)} watch(es): {names}. Ctrl+C to stop.")
     while True:

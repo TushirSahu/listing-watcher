@@ -7,6 +7,7 @@ import yaml
 
 MIN_INTERVAL = timedelta(minutes=15)
 _UNITS = {"m": "minutes", "h": "hours", "d": "days"}
+_FIELDS = {"name", "site", "want", "max_price", "every", "max_results", "open_listings"}
 
 
 class ConfigError(Exception):
@@ -49,6 +50,9 @@ def load_watches(path: Path) -> list[Watch]:
         try:
             if not isinstance(item, dict):
                 raise ConfigError("must be a mapping")
+            unknown = sorted(set(item) - _FIELDS)
+            if unknown:
+                raise ConfigError(f"unknown field {', '.join(map(repr, unknown))} (allowed: {', '.join(sorted(_FIELDS))})")
             missing = [k for k in ("name", "site", "want") if not item.get(k)]
             if missing:
                 raise ConfigError(f"missing {', '.join(missing)}")

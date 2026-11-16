@@ -18,7 +18,9 @@ Requires Python 3.11+.
 git clone <this repo> && cd listing-watcher
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-browser-use install                 # downloads the Chromium the agent drives
+# The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile
+# (never your logged-in sessions). No Chrome installed? Get Chromium:
+#   pip install playwright && playwright install chromium
 
 cp .env.example .env                # choose a provider, paste your API key
 cp watches.example.yaml watches.yaml  # describe what to watch

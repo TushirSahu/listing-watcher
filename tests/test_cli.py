@@ -33,10 +33,25 @@ async def test_run_due_isolates_failures(monkeypatch):
     monkeypatch.setattr(cli, "run_watch", fake_run)
     s = Store(":memory:")
     sent = []
-    await run_due([W("a"), W("b")], s, object(), NOW, True, sent.append)
+    await run_due([W("a"), W("b")], s, object(), NOW, True, lambda t: sent.append(t) or True)
     assert len(sent) == 2
-    assert "check failed" in sent[0][0] and "crash" in sent[0][0]
+    assert "check failed" in sent[0] and "crash" in sent[0]
     assert s.last_run("a") == NOW and s.last_run("b") == NOW
+
+
+async def test_run_due_failed_send_retries_listing(monkeypatch):
+    from watcher.models import Listing
+
+    item = Listing(url="https://x.jp/1", title="Sony", price=1, why_matches="fits", matches=True, verified=True)
+
+    async def fake_run(watch, llm, headless=True):
+        return RunResult(searched=True, listings_seen=1, blocked_or_lost=False, note="", listings=[item])
+
+    monkeypatch.setattr(cli, "run_watch", fake_run)
+    s = Store(":memory:")
+    s.set_status("a", "ok")  # past first run
+    await run_due([W("a")], s, object(), NOW, True, lambda t: False)
+    assert not s.seen("a", "https://x.jp/1")
 
 
 def _env(monkeypatch, tmp_path, **env):

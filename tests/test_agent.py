@@ -77,3 +77,25 @@ async def test_run_watch_no_structured_output(monkeypatch):
     monkeypatch.setattr(agent_mod, "Browser", lambda *a, **k: None)
     r = await run_watch(W, llm=object())
     assert r.failed and "gave up" in r.note
+
+
+async def test_run_watch_failed_history_keeps_reason(monkeypatch):
+    class History:
+        status = "failed"
+        error = "invalid x-api-key"
+        structured_output = None
+        def final_result(self): return None
+
+    class FailAgent:
+        def __init__(self, *a, **k): pass
+        async def run(self, *a, **k): return History()
+
+    monkeypatch.setattr(agent_mod, "Agent", FailAgent)
+    monkeypatch.setattr(agent_mod, "Browser", lambda *a, **k: None)
+    r = await run_watch(W, llm=object())
+    assert r.failed and "invalid x-api-key" in r.note and "failed" in r.note
+
+
+def test_build_task_skips_sold():
+    t = build_task(W)
+    assert "sold" in t.lower() and "売り切れ" in t

@@ -54,6 +54,7 @@ def build_task(watch: Watch) -> str:
     else:
         lines.append("Judge from the search results page only: do not open listing pages; set verified to false.")
     lines += [
+        "Skip listings marked sold, reserved, or unavailable (e.g. SOLD / 売り切れ / 取引中): never report them as matches.",
         "Rules: this is read-only. do NOT log in, buy, message, or click purchase buttons.",
         "If you hit a captcha, login wall, or cannot find a search, set blocked_or_lost true and explain in note.",
         "Report every listing you looked at. For each: full url, title, price as an integer in yen (null if unknown), "
@@ -88,8 +89,10 @@ async def run_watch(watch: Watch, llm: object, headless: bool = True) -> RunResu
         history = await agent.run(max_steps=max_steps(watch))
         out = history.structured_output
         if out is None:
-            final = history.final_result() if hasattr(history, "final_result") else None
-            return failed_result(f"agent gave no structured result ({final or 'no output'})"[:300])
+            # browser-use 1.0 reports bad keys, timeouts, step limits via status/error instead of raising
+            status = getattr(history, "status", None) or "unknown"
+            reason = getattr(history, "error", None) or (history.final_result() if hasattr(history, "final_result") else None)
+            return failed_result(f"agent run {status}: {reason or 'no structured result'}"[:300])
         return out if isinstance(out, RunResult) else RunResult.model_validate(out)
     except Exception as e:  # never raise: a broken run is reported, not fatal
         return failed_result(f"{type(e).__name__}: {e}"[:300])

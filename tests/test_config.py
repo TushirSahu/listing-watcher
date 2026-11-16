@@ -56,3 +56,10 @@ def test_duplicate_names(tmp_path):
 def test_example_file_loads():
     [w] = load_watches(ROOT / "watches.example.yaml")
     assert w.name == "headphones" and w.max_price == 25000 and w.open_listings == 5
+
+
+def test_unknown_field_rejected(tmp_path):
+    p = write(tmp_path, "watches:\n  - {name: phones, site: s, want: w, max_prize: 25000}\n")
+    with pytest.raises(ConfigError) as e:
+        load_watches(p)
+    assert "phones" in str(e.value) and "max_prize" in str(e.value)
