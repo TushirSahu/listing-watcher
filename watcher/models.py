@@ -8,6 +8,7 @@ class Listing(BaseModel):
     why_matches: str
     matches: bool
     verified: bool
+    item_key: str | None = None
 
 
 class RunResult(BaseModel):

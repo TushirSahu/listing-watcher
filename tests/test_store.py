@@ -50,3 +50,27 @@ def test_run_result_failed():
     assert ok.failed is False
     assert RunResult(searched=True, listings_seen=0, blocked_or_lost=True, note="", listings=[]).failed
     assert failed_result("x").failed is True
+
+
+def test_record_key():
+    s = Store(":memory:")
+    s.record("w", "u", 100, key="k")
+    assert s.seen_key("w", "k") and s.key_price("w", "k") == 100
+    s.record("w", "u2", 90, key="k")
+    assert s.key_price("w", "k") == 90
+    assert not s.seen_key("w", "other")
+
+
+def test_old_db_without_keys_table(tmp_path):
+    import sqlite3
+    p = tmp_path / "old.db"
+    db = sqlite3.connect(p)
+    db.executescript(
+        "CREATE TABLE seen (watch TEXT, url TEXT, price INTEGER, first_seen TEXT, PRIMARY KEY (watch, url));"
+        "CREATE TABLE watch_state (watch TEXT PRIMARY KEY, status TEXT, ever_ok INTEGER DEFAULT 0, last_run TEXT);"
+    )
+    db.close()
+    s = Store(p)
+    assert s.seen_key("w", "k") is False
+    s.record("w", "u", 1, key="k")
+    assert s.seen_key("w", "k")

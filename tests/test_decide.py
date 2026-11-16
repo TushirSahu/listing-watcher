@@ -141,3 +141,46 @@ def test_failed_send_not_recorded_retries_next_run():
     process(W, ok(lst("https://x.jp/2", 100)), s, send=lambda text: False)
     assert not s.seen("w", "https://x.jp/2")
     assert len(process(W, ok(lst("https://x.jp/2", 100)), s)) == 1
+
+
+def klst(url, price, key):
+    return Listing(url=url, title="Flat", price=price, why_matches="fits", matches=True, verified=True, item_key=key)
+
+
+def test_no_key_unchanged():
+    s = Store(":memory:")
+    started(s, lst("https://x.jp/1", 100))
+    assert len(process(W, ok(lst("https://x.jp/2", 100)), s)) == 1
+
+
+def test_same_key_new_link_not_new():
+    s = Store(":memory:")
+    started(s, klst("https://x.jp/1", 60000, "Maison A 3F 1K"))
+    assert process(W, ok(klst("https://x.jp/2", 60000, "Maison A 3F 1K")), s) == []
+
+
+def test_key_normalized():
+    s = Store(":memory:")
+    started(s, klst("https://x.jp/1", 60000, "Maison A 3F 1K"))
+    assert process(W, ok(klst("https://x.jp/2", 60000, " maison a  3f 1k")), s) == []
+
+
+def test_same_key_cheaper_link_is_drop():
+    s = Store(":memory:")
+    started(s, klst("https://x.jp/1", 60000, "Maison A 3F 1K"))
+    [m] = process(W, ok(klst("https://x.jp/2", 57000, "Maison A 3F 1K")), s)
+    assert m.startswith("[w] price drop:") and "¥60,000 -> ¥57,000" in m and "https://x.jp/2" in m
+
+
+def test_same_key_pricier_ignored():
+    s = Store(":memory:")
+    started(s, klst("https://x.jp/1", 60000, "Maison A 3F 1K"))
+    assert process(W, ok(klst("https://x.jp/2", 63000, "Maison A 3F 1K")), s) == []
+    assert s.key_price("w", "maison a 3f 1k") == 60000
+
+
+def test_same_key_twice_in_run():
+    s = Store(":memory:")
+    started(s)
+    [m] = process(W, ok(klst("https://x.jp/1", 61000, "B 2F"), klst("https://x.jp/2", 59000, "B 2F")), s)
+    assert "¥59,000" in m and m.startswith("[w] new:")

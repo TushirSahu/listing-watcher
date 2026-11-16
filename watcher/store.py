@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS seen (
     watch TEXT, url TEXT, price INTEGER, first_seen TEXT,
     PRIMARY KEY (watch, url)
 );
+CREATE TABLE IF NOT EXISTS seen_keys (
+    watch TEXT, key TEXT, price INTEGER, PRIMARY KEY (watch, key)
+);
 CREATE TABLE IF NOT EXISTS watch_state (
     watch TEXT PRIMARY KEY, status TEXT, ever_ok INTEGER DEFAULT 0, last_run TEXT
 );
@@ -32,12 +35,25 @@ class Store:
         row = self._one("SELECT price FROM seen WHERE watch=? AND url=?", watch, url)
         return row[0] if row else None
 
-    def record(self, watch: str, url: str, price: int | None) -> None:
+    def seen_key(self, watch: str, key: str) -> bool:
+        return self._one("SELECT 1 FROM seen_keys WHERE watch=? AND key=?", watch, key) is not None
+
+    def key_price(self, watch: str, key: str) -> int | None:
+        row = self._one("SELECT price FROM seen_keys WHERE watch=? AND key=?", watch, key)
+        return row[0] if row else None
+
+    def record(self, watch: str, url: str, price: int | None, key: str | None = None) -> None:
         self._write(
             "INSERT INTO seen (watch, url, price, first_seen) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(watch, url) DO UPDATE SET price=excluded.price",
             watch, url, price, datetime.now().isoformat(),
         )
+        if key:
+            self._write(
+                "INSERT INTO seen_keys (watch, key, price) VALUES (?, ?, ?) "
+                "ON CONFLICT(watch, key) DO UPDATE SET price=excluded.price",
+                watch, key, price,
+            )
 
     def _state(self, watch: str):
         return self._one("SELECT status, ever_ok, last_run FROM watch_state WHERE watch=?", watch)
