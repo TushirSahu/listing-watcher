@@ -7,7 +7,7 @@ name = "listing-watcher"
 version = "0.1.0"
 description = "Browser agent that watches listing sites and alerts you on new matches"
 requires-python = ">=3.11"
-dependencies = ["browser-use==1.0.5", "pyyaml", "python-dotenv"]
+dependencies = ["browser-use==1.0.5", "pyyaml", "python-dotenv", "certifi"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]

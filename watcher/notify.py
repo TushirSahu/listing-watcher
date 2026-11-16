@@ -1,5 +1,11 @@
+import ssl
 import urllib.parse
 import urllib.request
+
+import certifi
+
+# python.org macOS builds ship without CA certs; certifi's bundle works everywhere
+_SSL = ssl.create_default_context(cafile=certifi.where())
 
 
 def send_message(text: str, token: str | None, chat_id: str | None) -> bool:
@@ -12,7 +18,7 @@ def send_message(text: str, token: str | None, chat_id: str | None) -> bool:
     ).encode()
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=_SSL) as resp:
             resp.read()
         return True
     except Exception as e:  # alerts must never crash the watcher; caller retries next run

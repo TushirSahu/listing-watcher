@@ -21,7 +21,7 @@ def test_no_token_prints_only_counts_as_delivered(monkeypatch, capsys):
 def test_sends_to_telegram(monkeypatch):
     reqs = []
 
-    def fake(req, timeout=None):
+    def fake(req, timeout=None, context=None):
         reqs.append((req.full_url, req.data))
         return Resp()
 
@@ -39,3 +39,16 @@ def test_send_error_returns_false_not_raised(monkeypatch, capsys):
     monkeypatch.setattr(notify_mod.urllib.request, "urlopen", boom)
     assert send_message("a", "T", "1") is False
     assert "telegram send failed" in capsys.readouterr().out
+
+
+def test_uses_certifi_ssl_context(monkeypatch):
+    # python.org macOS builds ship without CA certs: always pass an explicit certifi context
+    seen = {}
+
+    def fake(req, timeout=None, context=None):
+        seen["context"] = context
+        return Resp()
+
+    monkeypatch.setattr(notify_mod.urllib.request, "urlopen", fake)
+    assert send_message("a", "T", "1") is True
+    assert seen["context"] is not None
