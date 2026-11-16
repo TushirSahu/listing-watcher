@@ -53,7 +53,13 @@ def build_task(watch: Watch) -> str:
         "Skip listings marked sold, reserved, or unavailable (e.g. SOLD / 売り切れ / 取引中): never report them as matches.",
         "Rules: this is read-only. do NOT log in, buy, message, or click purchase buttons.",
         "If you hit a captcha, login wall, or cannot find a search, set blocked_or_lost true and explain in note.",
-        "Report every listing you looked at. For each: full url, title, price as an integer in yen (null if unknown), "
+        "Price means what the buyer actually pays per period, as an integer in yen: include mandatory recurring fees "
+        "(rent + 管理費/共益費 for rentals; item + shipping if shipping is charged). One-time costs (敷金/礼金, agency fee) "
+        "are NOT part of price: mention them in why_matches instead.",
+        "item_key identifies the physical item regardless of link, so the same thing listed twice is recognized: "
+        "for apartments building name + floor + layout + size (e.g. 'Maison Suita 3F 1K 25m2'); for marketplace items "
+        "seller + exact title. Use null if unsure.",
+        "Report every listing you looked at. For each: full url, title, item_key, price (null if unknown), "
         "matches (true only if it fits the request and budget), verified, and why_matches (one short line, in English).",
         "Set searched true once you have run a search, and listings_seen to how many results you read.",
     ]

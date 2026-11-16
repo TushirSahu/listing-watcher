@@ -57,6 +57,15 @@ On the first `run` of a new watch, current matches are recorded quietly and you 
 | `max_results` | no | `10` | search results the agent reads per check |
 | `open_listings` | no | `5` | top candidates the agent opens to verify details; `0` = search page only (alerts marked *unverified*) |
 
+## Apartment hunting
+
+`watches.example.yaml` includes a SUUMO watch (`apartment`): 1K/1LDK rentals in Suita, Osaka, near a station, foreigner-friendly, up to ¥70,000/month. Change the `want` text to your area and needs and set `max_price` to your budget. Try it with `listing-watcher check apartment`.
+
+How it handles rentals (and any other site):
+
+- **Price is the real monthly cost:** rent + management fee (管理費/共益費). One-time costs (deposit, key money, agency fee) are listed in the alert text instead. For shop items, price includes shipping when it's charged.
+- **The same flat from several agencies alerts once.** The agent reports a short identity for each item (building, floor, layout, size), and repeats are recognized even under different links. If another agency lists the same flat for less, you get a price-drop alert.
+
 ## Models and cost
 
 Each check is one agent run of up to `15 + 4 × open_listings` browser steps, each an LLM call. A small, fast model (Haiku / mini / Flash class) is enough. Lower `open_listings` or raise `every` to spend less.

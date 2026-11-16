@@ -7,3 +7,10 @@ watches:
     every: 2h             # 30m / 2h / 1d — minimum 15m
     open_listings: 5      # open top N listings to check condition; 0 = search page only
     # max_results: 10     # how many search results to read
+
+  - name: apartment
+    site: https://suumo.jp/chintai/
+    want: "1K or 1LDK rental in Suita, Osaka, within a 10 minute walk of a station, foreigner-friendly (外国人可)"
+    max_price: 70000      # yen per month, rent + management fee
+    every: 6h
+    open_listings: 3

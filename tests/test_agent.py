@@ -99,3 +99,9 @@ async def test_run_watch_failed_history_keeps_reason(monkeypatch):
 def test_build_task_skips_sold():
     t = build_task(W)
     assert "sold" in t.lower() and "売り切れ" in t
+
+
+def test_build_task_price_and_key_rules():
+    t = build_task(W)
+    for s in ["管理費", "shipping", "敷金", "item_key"]:
+        assert s in t, s

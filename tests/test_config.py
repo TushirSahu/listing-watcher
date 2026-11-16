@@ -54,8 +54,10 @@ def test_duplicate_names(tmp_path):
 
 
 def test_example_file_loads():
-    [w] = load_watches(ROOT / "watches.example.yaml")
+    w, apt = load_watches(ROOT / "watches.example.yaml")
     assert w.name == "headphones" and w.max_price == 25000 and w.open_listings == 5
+    assert apt.name == "apartment" and apt.site.startswith("https://suumo.jp")
+    assert apt.max_price == 70000 and apt.every == timedelta(hours=6) and apt.open_listings == 3
 
 
 def test_unknown_field_rejected(tmp_path):
