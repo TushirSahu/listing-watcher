@@ -120,3 +120,10 @@ async def test_run_watch_passes_context_cap(monkeypatch):
     assert seen["max_context_chars"] == 60000
     await run_watch(W, llm=object())
     assert seen["max_context_chars"] is None
+
+
+def test_google_retries_rate_limits():
+    llm = make_llm("google", "gemini-x", {"GOOGLE_API_KEY": "k"})
+    model = llm.pydantic_model()
+    opts = model._provider._client._api_client._http_options.retry_options
+    assert opts.attempts >= 5 and 429 in opts.http_status_codes and 503 in opts.http_status_codes

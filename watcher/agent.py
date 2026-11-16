@@ -6,10 +6,23 @@ from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOpenAI
 from watcher.config import ConfigError, Watch
 from watcher.models import RunResult, failed_result
 
+class RetryingGoogle(ChatGoogle):
+    """ChatGoogle that retries 429/503 with backoff. Gemini's free tier allows ~15 requests/min, and an
+    agent run bursts past that; browser-use's ChatGoogle sets no retries, so one 429 kills the run."""
+
+    def pydantic_model(self):
+        from google.genai import types
+        from pydantic_ai.models.google import GoogleModel
+        from pydantic_ai.providers.google import GoogleProvider
+
+        retry = types.HttpRetryOptions(attempts=8, initial_delay=5, max_delay=60, http_status_codes=[429, 503])
+        return GoogleModel(self.model, provider=GoogleProvider(api_key=self.api_key, retry_options=retry))
+
+
 PROVIDERS = {
     "anthropic": (ChatAnthropic, "ANTHROPIC_API_KEY"),
     "openai": (ChatOpenAI, "OPENAI_API_KEY"),
-    "google": (ChatGoogle, "GOOGLE_API_KEY"),
+    "google": (RetryingGoogle, "GOOGLE_API_KEY"),
     "ollama": (ChatOpenAI, None),
 }
 
