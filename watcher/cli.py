@@ -47,7 +47,7 @@ def _print_result(result) -> None:
     for item in result.listings:
         price = "?" if item.price is None else f"¥{item.price:,}"
         print(f"- [{'MATCH' if item.matches else 'no'}{'' if item.verified else ', unverified'}] "
-              f"{item.title} - {price}\n  {item.why_matches}\n  {item.url}")
+              f"{item.title} - {price}\n  {item.why_matches}\n  id: {item.item_key or '-'}\n  {item.url}")
 
 
 async def _loop(watches, store, llm, headless) -> None:
