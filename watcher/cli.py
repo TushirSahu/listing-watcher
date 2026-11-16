@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 import os
 import sys
 from collections.abc import Callable
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser("check", parents=[common], help="test one watch once; prints only, no alerts or memory")
     check_p.add_argument("name")
     args = parser.parse_args(argv)
+    logging.getLogger("browser_use").setLevel(logging.WARNING)  # hide per-step agent logs
 
     try:
         watches, llm = _setup(args.config)
