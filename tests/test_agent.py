@@ -133,3 +133,8 @@ def test_build_task_reading_rules():
     t = build_task(W)
     for s in ["万円", "javascript", "already a search results page", "only if you could not see any results"]:
         assert s in t, s
+
+
+def test_build_task_unstated_criteria_rule():
+    t = build_task(W)
+    assert "not stated" in t and "do not reject" in t

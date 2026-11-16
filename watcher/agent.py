@@ -77,6 +77,9 @@ def build_task(watch: Watch) -> str:
         "item_key identifies the physical item regardless of link, so the same thing listed twice is recognized: "
         "for apartments building name + floor + layout + size (e.g. 'Maison Suita 3F 1K 25m2'); for marketplace items "
         "seller + exact title. Use null if unsure.",
+        "If a requirement is simply not stated on the listing (e.g. foreigner-friendly, pet OK), do not reject "
+        "it for that: set matches true if everything else fits, and say what is unconfirmed in why_matches. "
+        "Reject only when the listing contradicts the request.",
         "url must be the listing's own detail page as a full https link (copy the href of its title link); "
         "never javascript: or # links.",
         "Report every listing you looked at. For each: full url, title, item_key, price (null if unknown), "
