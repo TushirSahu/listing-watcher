@@ -21,10 +21,6 @@ def normalize_url(url: str, base: str | None = None) -> str:
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(params), ""))
 
 
-def _yen(price: int | None) -> str:
-    return "price ?" if price is None else f"¥{price:,}"
-
-
 def _candidates(watch: Watch, result: RunResult) -> dict[str, Listing]:
     out: dict[str, Listing] = {}
     for item in result.listings:
@@ -72,8 +68,9 @@ def process(watch: Watch, result: RunResult, store: Store,
     else:
         for url, item in found.items():
             if not store.seen(name, url):
+                price = "price ?" if item.price is None else f"¥{item.price:,}"
                 tag = "" if item.verified else " (unverified)"
-                if emit(f"[{name}] new: {item.title} - {_yen(item.price)}{tag}\n{item.why_matches}\n{url}"):
+                if emit(f"[{name}] new: {item.title} - {price}{tag}\n{item.why_matches}\n{url}"):
                     store.record(name, url, item.price)
                 continue
             old = store.last_price(name, url)

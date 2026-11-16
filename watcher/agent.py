@@ -1,4 +1,4 @@
-import inspect
+import contextlib
 from collections.abc import Mapping
 
 from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOpenAI
@@ -6,29 +6,25 @@ from browser_use import Agent, Browser, ChatAnthropic, ChatGoogle, ChatOpenAI
 from watcher.config import ConfigError, Watch
 from watcher.models import RunResult, failed_result
 
-REQUIRED_KEY = {
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "google": "GOOGLE_API_KEY",
-    "ollama": None,
+PROVIDERS = {
+    "anthropic": (ChatAnthropic, "ANTHROPIC_API_KEY"),
+    "openai": (ChatOpenAI, "OPENAI_API_KEY"),
+    "google": (ChatGoogle, "GOOGLE_API_KEY"),
+    "ollama": (ChatOpenAI, None),
 }
 
 
 def make_llm(provider: str, model: str, env: Mapping[str, str]) -> object:
     provider = (provider or "").strip().lower()
-    if provider not in REQUIRED_KEY:
-        raise ConfigError(f"LLM_PROVIDER must be one of {', '.join(REQUIRED_KEY)} (got {provider!r})")
+    if provider not in PROVIDERS:
+        raise ConfigError(f"LLM_PROVIDER must be one of {', '.join(PROVIDERS)} (got {provider!r})")
     if not model:
         raise ConfigError("LLM_MODEL is empty")
-    key_var = REQUIRED_KEY[provider]
-    if key_var and not env.get(key_var):
-        raise ConfigError(f"{key_var} is not set (needed for LLM_PROVIDER={provider})")
-    if provider == "anthropic":
-        return ChatAnthropic(model=model, api_key=env[key_var])
-    if provider == "openai":
-        return ChatOpenAI(model=model, api_key=env[key_var])
-    if provider == "google":
-        return ChatGoogle(model=model, api_key=env[key_var])
+    cls, key_var = PROVIDERS[provider]
+    if key_var:
+        if not env.get(key_var):
+            raise ConfigError(f"{key_var} is not set (needed for LLM_PROVIDER={provider})")
+        return cls(model=model, api_key=env[key_var])
     # browser-use 1.0 removed ChatOllama; Ollama speaks the OpenAI API.
     host = env.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
     return ChatOpenAI(model=model, base_url=f"{host}/v1", api_key="ollama")
@@ -64,17 +60,6 @@ def build_task(watch: Watch) -> str:
     return "\n".join(lines)
 
 
-async def _close(browser) -> None:
-    if browser is None:
-        return
-    try:
-        res = browser.kill()
-        if inspect.isawaitable(res):
-            await res
-    except Exception:
-        pass
-
-
 async def run_watch(watch: Watch, llm: object, headless: bool = True) -> RunResult:
     browser = None
     try:
@@ -97,4 +82,5 @@ async def run_watch(watch: Watch, llm: object, headless: bool = True) -> RunResu
     except Exception as e:  # never raise: a broken run is reported, not fatal
         return failed_result(f"{type(e).__name__}: {e}"[:300])
     finally:
-        await _close(browser)
+        with contextlib.suppress(Exception):  # browser may be None if launch failed
+            await browser.kill()

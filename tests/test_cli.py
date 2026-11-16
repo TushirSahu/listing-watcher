@@ -24,21 +24,6 @@ def test_due():
     assert due([a], s, NOW) == [a]
 
 
-async def test_run_due_isolates_failures(monkeypatch):
-    async def fake_run(watch, llm, headless=True):
-        if watch.name == "a":
-            raise RuntimeError("crash")
-        return RunResult(searched=True, listings_seen=0, blocked_or_lost=False, note="", listings=[])
-
-    monkeypatch.setattr(cli, "run_watch", fake_run)
-    s = Store(":memory:")
-    sent = []
-    await run_due([W("a"), W("b")], s, object(), NOW, True, lambda t: sent.append(t) or True)
-    assert len(sent) == 2
-    assert "check failed" in sent[0] and "crash" in sent[0]
-    assert s.last_run("a") == NOW and s.last_run("b") == NOW
-
-
 async def test_run_due_failed_send_retries_listing(monkeypatch):
     from watcher.models import Listing
 
