@@ -36,9 +36,12 @@ def _candidates(watch: Watch, result: RunResult) -> dict[str, Listing]:
     for item in result.listings:
         if not item.matches:
             continue
+        url = normalize_url(item.url, watch.site)
+        if not url.startswith(("http://", "https://")) or url == normalize_url(watch.site):
+            continue  # javascript:/# links (or the search page itself) aren't a listing
         if watch.max_price is not None and item.price is not None and item.price > watch.max_price:
             continue
-        by_url.setdefault(normalize_url(item.url, watch.site), item)
+        by_url.setdefault(url, item)
     out: dict[str, Listing] = {}
     key_url: dict[str, str] = {}
     for url, item in by_url.items():

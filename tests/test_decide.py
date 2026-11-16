@@ -184,3 +184,10 @@ def test_same_key_twice_in_run():
     started(s)
     [m] = process(W, ok(klst("https://x.jp/1", 61000, "B 2F"), klst("https://x.jp/2", 59000, "B 2F")), s)
     assert "¥59,000" in m and m.startswith("[w] new:")
+
+
+def test_non_http_links_ignored():
+    s = Store(":memory:")
+    started(s)
+    assert process(W, ok(lst("javascript:void(0);", 100)), s) == []
+    assert process(W, ok(lst("#", 100)), s) == []

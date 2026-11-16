@@ -9,7 +9,8 @@ watches:
     # max_results: 10     # how many search results to read
 
   - name: apartment
-    site: https://suumo.jp/chintai/
+    # Set filters on suumo.jp (area, rent, layout) and paste the results page URL here
+    site: https://suumo.jp/chintai/osaka/sc_suita/?ct=7.0&md=02&md=04
     want: "1K or 1LDK rental in Suita, Osaka, within a 10 minute walk of a station, foreigner-friendly (外国人可)"
     max_price: 70000      # yen per month, rent + management fee
     every: 6h

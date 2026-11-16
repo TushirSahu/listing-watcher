@@ -127,3 +127,9 @@ def test_google_retries_rate_limits():
     model = llm.pydantic_model()
     opts = model._provider._client._api_client._http_options.retry_options
     assert opts.attempts >= 5 and 429 in opts.http_status_codes and 503 in opts.http_status_codes
+
+
+def test_build_task_reading_rules():
+    t = build_task(W)
+    for s in ["万円", "javascript", "already a search results page", "only if you could not see any results"]:
+        assert s in t, s

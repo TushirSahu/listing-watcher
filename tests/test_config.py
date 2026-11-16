@@ -56,7 +56,7 @@ def test_duplicate_names(tmp_path):
 def test_example_file_loads():
     w, apt = load_watches(ROOT / "watches.example.yaml")
     assert w.name == "headphones" and w.max_price == 25000 and w.open_listings == 5
-    assert apt.name == "apartment" and apt.site.startswith("https://suumo.jp")
+    assert apt.name == "apartment" and apt.site.startswith("https://suumo.jp/chintai/osaka/sc_suita/?")
     assert apt.max_price == 70000 and apt.every == timedelta(hours=6) and apt.open_listings == 3
 
 

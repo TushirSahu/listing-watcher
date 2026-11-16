@@ -49,11 +49,15 @@ def max_steps(watch: Watch) -> int:
 
 def build_task(watch: Watch) -> str:
     lines = [
-        f"Go to {watch.site} and search for listings matching this request:",
+        f"Go to {watch.site} and find listings matching this request:",
         f'"{watch.want}"',
     ]
     if watch.max_price is not None:
         lines.append(f"Budget: at most ¥{watch.max_price:,}. Ignore listings above it.")
+    lines.append(
+        "If that page is already a search results page, read the results directly: do not redo the search "
+        "or fight with filter buttons."
+    )
     lines.append(f"Prefer newest listings first if the site allows sorting. read at most {watch.max_results} results.")
     if watch.open_listings > 0:
         lines.append(
@@ -65,13 +69,16 @@ def build_task(watch: Watch) -> str:
     lines += [
         "Skip listings marked sold, reserved, or unavailable (e.g. SOLD / 売り切れ / 取引中): never report them as matches.",
         "Rules: this is read-only. do NOT log in, buy, message, or click purchase buttons.",
-        "If you hit a captcha, login wall, or cannot find a search, set blocked_or_lost true and explain in note.",
+        "Set blocked_or_lost true only if you could not see any results (captcha, login wall, error page); "
+        "explain in note. Running out of steps after reading results is not blocked.",
         "Price means what the buyer actually pays per period, as an integer in yen: include mandatory recurring fees "
         "(rent + 管理費/共益費 for rentals; item + shipping if shipping is charged). One-time costs (敷金/礼金, agency fee) "
-        "are NOT part of price: mention them in why_matches instead.",
+        "are NOT part of price: mention them in why_matches instead. Convert 万円 to yen (8.35万円 = 83500).",
         "item_key identifies the physical item regardless of link, so the same thing listed twice is recognized: "
         "for apartments building name + floor + layout + size (e.g. 'Maison Suita 3F 1K 25m2'); for marketplace items "
         "seller + exact title. Use null if unsure.",
+        "url must be the listing's own detail page as a full https link (copy the href of its title link); "
+        "never javascript: or # links.",
         "Report every listing you looked at. For each: full url, title, item_key, price (null if unknown), "
         "matches (true only if it fits the request and budget), verified, and why_matches (one short line, in English).",
         "Set searched true once you have run a search, and listings_seen to how many results you read.",
