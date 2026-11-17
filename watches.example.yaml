@@ -1,9 +1,0 @@
-# Copy to watches.yaml and edit. Describe what you want in plain words.
-watches:
-  - name: headphones
-    site: https://jp.mercari.com
-    want: "Sony WH-1000XM5, good condition, no damage, with case"
-    max_price: 25000      # yen, optional
-    every: 2h             # 30m / 2h / 1d — minimum 15m
-    open_listings: 5      # open top N listings to check condition; 0 = search page only
-    # max_results: 10     # how many search results to read

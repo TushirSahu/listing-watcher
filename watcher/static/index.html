@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>listing-watcher</title>
+<script>
+  // apply a saved theme before first paint (no flash); otherwise follow the system setting
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --text: #0a0a0a;
+    --muted: #737373;
+    --faint: #a3a3a3;
+    --border: #e7e7e7;
+    --hover: #f2f2f2;
+    --live: #16a34a;
+    --error: #dc2626;
+    --sans: "Geist", "Hiragino Sans", system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, monospace;
+    --radius: 12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a0a0a; --surface: #111111; --text: #ededed; --muted: #8f8f8f; --faint: #5c5c5c;
+      --border: #222222; --hover: #181818; --live: #22c55e; --error: #f87171;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0a0a; --surface: #111111; --text: #ededed; --muted: #8f8f8f; --faint: #5c5c5c;
+    --border: #222222; --hover: #181818; --live: #22c55e; --error: #f87171;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+    display: grid; grid-template-rows: auto 1fr;
+  }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 6px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    height: 56px; padding: 0 20px; border-bottom: 1px solid var(--border);
+  }
+  .brand { font-weight: 600; font-size: 14px; letter-spacing: -.01em; margin: 0; }
+  .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 12px var(--mono); color: var(--muted);
+    padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px;
+  }
+  .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .status.busy::before { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 25%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+  .status.offline { color: var(--error); }
+  .icon-btn {
+    margin-left: auto; width: 32px; height: 32px; display: grid; place-items: center;
+    background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--muted);
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--text); }
+  .icon-btn .sun, .dark-on .icon-btn .moon { display: none; }
+  .dark-on .icon-btn .sun { display: block; }
+  .ghost {
+    background: none; border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; font-size: 13px;
+  }
+  .ghost:hover:not(:disabled) { background: var(--hover); }
+  .ghost:disabled { color: var(--faint); cursor: not-allowed; }
+
+  main { display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); min-height: 0; }
+  main > * { min-width: 0; }
+
+  /* conversation */
+  .chat { display: grid; grid-template-rows: 1fr auto; border-right: 1px solid var(--border); min-height: 0; }
+  .log { overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 20px; }
+  .msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.you { align-self: flex-end; max-width: 85%; }
+  .msg.you p { background: var(--surface); border: 1px solid var(--border); border-radius: 14px 14px 4px 14px; padding: 8px 12px; }
+  .msg.agent .who { display: flex; align-items: center; gap: 6px; font: 12px var(--mono); color: var(--muted); margin-bottom: 4px; }
+  .msg.agent .who::before { content: ""; width: 14px; height: 14px; border-radius: 4px; background: var(--text); }
+  .msg.agent.error p { color: var(--error); }
+  .msg .count { font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+
+  .composer { padding: 12px 20px 20px; }
+  .field {
+    display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    transition: border-color .15s;
+  }
+  .field:focus-within { border-color: var(--muted); }
+  .field textarea {
+    flex: 1; border: 0; outline: none; resize: none; background: none; color: var(--text);
+    font: inherit; line-height: 1.5; height: 44px; padding: 4px 0;
+  }
+  .field textarea::placeholder { color: var(--faint); }
+  .send {
+    width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px;
+    background: var(--text); color: var(--bg); display: grid; place-items: center;
+  }
+  .send:disabled, .field textarea:disabled { opacity: .35; cursor: not-allowed; }
+  .hint { font: 11px var(--mono); color: var(--faint); margin: 8px 2px 0; }
+
+  /* work area */
+  .board { overflow-y: auto; padding: 24px 28px 48px; display: flex; flex-direction: column; gap: 32px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 12px; }
+  .section-head h2 { font-size: 13px; font-weight: 500; margin: 0; }
+  .section-head span { font: 12px var(--mono); color: var(--muted); }
+
+  /* activity timeline */
+  .activity { min-width: 0; }
+  .timeline { list-style: none; margin: 0; padding: 0; max-height: 236px; overflow-y: auto; }
+  .timeline li {
+    position: relative; padding: 3px 0 3px 20px;
+    font: 12.5px/1.55 var(--mono); color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    animation: rise .25s ease-out both;
+  }
+  .timeline li::before {
+    content: ""; position: absolute; left: 3px; top: 10px; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--faint);
+  }
+  .timeline li::after { content: ""; position: absolute; left: 5px; top: 17px; bottom: -6px; width: 1px; background: var(--border); }
+  .timeline li:last-child::after { display: none; }
+  .timeline li .n { color: var(--faint); margin-right: 8px; }
+  .timeline.live li:last-child { color: var(--text); }
+  .timeline.live li:last-child::before { background: var(--live); animation: pulse 1.2s ease-in-out infinite; }
+  .timeline .idle { color: var(--faint); padding-left: 0; white-space: normal; }
+  .timeline .idle::before, .timeline .idle::after { display: none; }
+
+  /* results */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; display: flex; flex-direction: column;
+    transition: border-color .15s, transform .15s; animation: rise .3s ease-out both;
+  }
+  .card:hover { border-color: var(--muted); transform: translateY(-1px); }
+  .card .photo {
+    position: relative; aspect-ratio: 4 / 3; background: var(--hover);
+    display: grid; place-items: center; font: 12px var(--mono); color: var(--faint);
+  }
+  .card .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .num {
+    position: absolute; top: 10px; left: 10px; font: 500 11px var(--mono);
+    background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; backdrop-filter: blur(6px);
+  }
+  .card .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .card .price-row { display: flex; align-items: center; gap: 8px; }
+  .card .price { font-size: 18px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .card .lowest { font: 11px var(--mono); color: var(--live); border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; }
+  .card .title { font-size: 13.5px; font-weight: 500; line-height: 1.4; margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .why { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.5; }
+  .card .why .unverified { color: var(--faint); }
+  .card a {
+    margin-top: auto; padding-top: 8px; font: 12px var(--mono); color: var(--text); text-decoration: none;
+    display: inline-flex; gap: 4px; align-items: center;
+  }
+  .card a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  .empty { color: var(--muted); max-width: 560px; }
+  .empty p { margin: 0 0 12px; }
+  .suggestions { display: grid; gap: 8px; }
+  .suggestions button {
+    text-align: left; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+  .suggestions button::after { content: "↵"; font-family: var(--mono); color: var(--faint); }
+  .suggestions button:hover { background: var(--hover); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  @keyframes pulse { 50% { opacity: .4; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  @media (max-width: 860px) {
+    body { height: auto; }
+    main { grid-template-columns: minmax(0, 1fr); }
+    .chat { border-right: 0; border-bottom: 1px solid var(--border); }
+    .log { max-height: 55vh; }
+    header, .log, .composer { padding-left: 16px; padding-right: 16px; }
+    .board { padding: 20px 16px 40px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">listing-watcher</h1>
+  <span class="status" id="status">connecting</span>
+  <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark theme">
+    <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+  </button>
+  <button class="ghost" id="new" type="button">New search</button>
+</header>
+<main>
+  <section class="chat" aria-label="Conversation">
+    <div class="log" id="log" aria-live="polite"></div>
+    <form class="composer" id="form">
+      <div class="field">
+        <textarea id="input" placeholder="What are you looking for?" aria-label="Request"></textarea>
+        <button class="send" type="submit" id="send" aria-label="Send">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <p class="hint">Enter to send · Shift+Enter for a new line</p>
+    </form>
+  </section>
+  <section class="board" aria-label="Agent activity and results">
+    <div class="activity">
+      <div class="section-head"><h2>Activity</h2><span id="steps-count">idle</span></div>
+      <ol class="timeline" id="feed" aria-live="polite"></ol>
+    </div>
+    <div>
+      <div class="section-head"><h2 id="tags-title">Results</h2><span id="tags-meta"></span></div>
+      <div id="tags"></div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log"), feed = $("feed"), tags = $("tags"), input = $("input");
+const EXAMPLES = [
+  "Used Sony WH-1000XM5 under ¥25,000 with the case included, on Mercari",
+  "1K or 1LDK in Suita under ¥70,000 a month, 10 minutes from a station, on SUUMO",
+  "Nintendo Switch OLED, working, with dock, under ¥28,000",
+];
+let ws, busy = false, steps = 0, retry = 500;
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//.test(u) ? u : null);
+const yen = (p) => (p == null ? "¥ —" : "¥" + p.toLocaleString("ja-JP"));
+
+function setBusy(b) {
+  busy = b;
+  input.disabled = $("send").disabled = $("new").disabled = b;
+  $("status").textContent = b ? "working" : "ready";
+  $("status").className = "status" + (b ? " busy" : "");
+  feed.classList.toggle("live", b);
+  $("steps-count").textContent = steps ? `${steps} step${steps > 1 ? "s" : ""}${b ? "" : " · done"}` : b ? "starting" : "idle";
+  if (!b) input.focus();
+}
+
+function addMessage(role, text, count) {
+  const isError = role === "agent" && text.startsWith("error:");
+  const m = el("div", `msg ${role}` + (isError ? " error" : ""));
+  if (role === "agent") m.append(el("div", "who", "agent"));
+  m.append(el("p", "", isError
+    ? "That didn't work: " + text.slice(6).trim() + "\nTry again in a minute, or send a follow-up."
+    : text));
+  if (count) m.append(el("div", "count", `${count} result${count > 1 ? "s" : ""} →`));
+  log.append(m);
+  log.scrollTop = log.scrollHeight;
+}
+
+function idleFeed(text) {
+  steps = 0;
+  feed.replaceChildren(el("li", "idle", text));
+}
+function addStep(text) {
+  if (steps === 0) feed.replaceChildren();
+  steps += 1;
+  const li = el("li");
+  const m = text.match(/^step (\d+) · (.*)$/);
+  if (m) li.append(el("span", "n", m[1].padStart(2, "0")), m[2]);
+  else li.textContent = text;
+  li.title = text;
+  feed.append(li);
+  feed.scrollTop = feed.scrollHeight;
+  $("steps-count").textContent = `${steps} step${steps > 1 ? "s" : ""}`;
+}
+
+function showEmpty() {
+  $("tags-title").textContent = "Results";
+  $("tags-meta").textContent = "";
+  const box = el("div", "empty");
+  box.append(el("p", "", "The agent searches, opens listings to check details, and shows what fits here. Try:"));
+  const list = el("div", "suggestions");
+  for (const e of EXAMPLES) {
+    const b = el("button", "", e);
+    b.type = "button";
+    b.onclick = () => { input.value = e; input.focus(); };
+    list.append(b);
+  }
+  box.append(list);
+  tags.className = "";
+  tags.replaceChildren(box);
+}
+
+function showTags(listings) {
+  if (!listings.length) return;
+  $("tags-title").textContent = "Results";
+  $("tags-meta").textContent = `${listings.length} · lowest price first`;
+  tags.className = "cards";
+  tags.replaceChildren(...listings.map((l, i) => {
+    const card = el("article", "card");
+    card.style.animationDelay = `${i * 50}ms`;
+    const photo = el("div", "photo", "no photo");
+    const src = safeUrl(l.image_url);
+    if (src) {
+      const img = new Image();
+      img.alt = l.title; img.loading = "lazy"; img.referrerPolicy = "no-referrer"; img.src = src;
+      img.onerror = () => { img.replaceWith("no photo"); };
+      photo.replaceChildren(img);
+    }
+    photo.append(el("span", "num", `#${i + 1}`));
+    const body = el("div", "body");
+    const row = el("div", "price-row");
+    row.append(el("span", "price", yen(l.price)));
+    if (i === 0 && l.price != null && listings.length > 1) row.append(el("span", "lowest", "lowest"));
+    body.append(row, el("h3", "title", l.title));
+    const why = el("p", "why", l.why_matches);
+    if (!l.verified) why.append(" ", el("span", "unverified", "· not opened"));
+    body.append(why);
+    const href = safeUrl(l.url);
+    if (href) {
+      const a = el("a", "", "Open listing ↗");
+      a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer";
+      body.append(a);
+    }
+    card.append(photo, body);
+    return card;
+  }));
+}
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { retry = 500; };
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "history") {
+      log.replaceChildren(); showEmpty();
+      if (!m.messages.length) addMessage("agent", "What are you looking for? I'll search, check the listings, and you can follow up — \"only ones with the case\", \"check #2's photos\".");
+      for (const h of m.messages) {
+        addMessage(h.role, h.text, h.listings.length);
+        if (h.listings.length) showTags(h.listings);
+      }
+      idleFeed("Steps appear here while the agent works.");
+      m.steps.forEach(addStep);
+      setBusy(m.busy);
+    } else if (m.type === "message") {
+      addMessage("you", m.text); idleFeed("Starting…"); setBusy(true);
+    } else if (m.type === "step") {
+      addStep(m.text);
+    } else if (m.type === "reply") {
+      addMessage("agent", m.text, m.listings.length);
+      showTags(m.listings); setBusy(false);
+    } else if (m.type === "busy") {
+      $("steps-count").textContent = "still working on the last request";
+    } else if (m.type === "reset") {
+      log.replaceChildren(); showEmpty();
+      idleFeed("Steps appear here while the agent works.");
+      addMessage("agent", "New search. What are you looking for?");
+      setBusy(false);
+    }
+  };
+  ws.onclose = () => {
+    $("status").textContent = "offline · reconnecting";
+    $("status").className = "status offline";
+    setTimeout(connect, retry = Math.min(retry * 2, 8000));
+  };
+}
+
+$("form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "ask", text }));
+  input.value = "";
+};
+input.onkeydown = (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); }
+};
+$("new").onclick = () => ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: "new" }));
+
+// theme toggle: follows the system until clicked, then remembers the choice
+const systemDark = matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => (document.documentElement.dataset.theme || (systemDark.matches ? "dark" : "light")) === "dark";
+function syncThemeButton() {
+  document.body.classList.toggle("dark-on", isDark());
+  $("theme").setAttribute("aria-label", isDark() ? "Switch to light theme" : "Switch to dark theme");
+}
+$("theme").onclick = () => {
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch (e) {}
+  syncThemeButton();
+};
+systemDark.addEventListener("change", syncThemeButton);
+syncThemeButton();
+
+idleFeed("Steps appear here while the agent works.");
+showEmpty();
+connect();
+</script>
+</body>
+</html>
