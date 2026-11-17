@@ -56,7 +56,7 @@ def test_index_served():
 def test_ask_reply_and_clean_listings():
     s = FakeSession()
     with TestClient(create_app(s)) as c, c.websocket_connect("/ws") as ws:
-        assert ws.receive_json() == {"type": "history", "messages": [], "busy": False}
+        assert ws.receive_json() == {"type": "history", "messages": [], "busy": False, "steps": []}
         ws.send_json({"type": "ask", "text": "find xm5"})
         msgs = until(ws, "reply")
         assert {"type": "message", "role": "you", "text": "find xm5"} in msgs
@@ -119,7 +119,7 @@ def test_steps_forwarded():
         ws.receive_json()
         ws.send_json({"type": "ask", "text": "a"})
         msgs = until(ws, "reply")
-        assert {"type": "step", "text": "step 2 · opening jp.mercari.com/search"} in msgs
+        assert {"type": "step", "text": "step 2 · searching jp.mercari.com for “xm5”"} in msgs
 
 
 def test_shutdown_closes_browser():
@@ -127,3 +127,57 @@ def test_shutdown_closes_browser():
     with TestClient(create_app(s)):
         pass
     assert s.closed == 1
+
+
+def test_step_text_more():
+    assert step_text("step 5: goto_url('https://jp.mercari.com/search?keyword=Sony+WH-1000XM5')") == \
+        "step 5 · searching jp.mercari.com for “Sony WH-1000XM5”"
+    assert step_text("step 2: screenshot()") == "step 2 · looking at the page"
+    assert step_text("step 16: time.sleep(2)") == "step 16 · waiting for the page to load"
+    assert step_text("step 21: result_data = {") == "step 21 · writing up results"
+
+
+def test_fill_images():
+    import httpx
+
+    from watcher.web import fill_images
+
+    pages = {
+        "https://x.jp/1": '<html><head><meta property="og:image" content="https://img.x.jp/1.jpg"/></head>',
+        "https://x.jp/2": '<meta name="twitter:image" content="https://img.x.jp/2.jpg">',
+        "https://x.jp/3": "<html>no image</html>",
+    }
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, text=pages.get(str(req.url), "")))
+    items = [
+        {"url": "https://x.jp/1", "image_url": None},
+        {"url": "https://x.jp/2", "image_url": None},
+        {"url": "https://x.jp/3", "image_url": None},
+        {"url": "https://x.jp/4", "image_url": "https://keep.jp/4.jpg"},
+    ]
+    asyncio.run(fill_images(items, transport=transport))
+    assert [i["image_url"] for i in items] == ["https://img.x.jp/1.jpg", "https://img.x.jp/2.jpg", None,
+                                               "https://keep.jp/4.jpg"]
+
+
+def test_fill_images_survives_errors():
+    import httpx
+
+    from watcher.web import fill_images
+
+    def boom(req):
+        raise httpx.ConnectError("down")
+
+    items = [{"url": "https://x.jp/1", "image_url": None}]
+    asyncio.run(fill_images(items, transport=httpx.MockTransport(boom)))
+    assert items[0]["image_url"] is None
+
+
+def test_history_includes_last_steps():
+    app = create_app(FakeSession(log='step 1: screenshot()'))
+    with TestClient(app) as c:
+        with c.websocket_connect("/ws") as ws:
+            ws.receive_json()
+            ws.send_json({"type": "ask", "text": "a"})
+            until(ws, "reply")
+        with c.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["steps"] == ["step 1 · looking at the page"]
