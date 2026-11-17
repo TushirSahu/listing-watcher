@@ -219,3 +219,7 @@ def test_rules_lead_with_tools():
     tools_at = SYSTEM_RULES.index("Your tools")
     assert tools_at < SYSTEM_RULES.index("Search URLs")
     assert "ALWAYS" in SYSTEM_RULES[tools_at:tools_at + 600]
+
+
+def test_rules_say_tools_are_not_python():
+    assert "not Python functions" in SYSTEM_RULES and "tool call" in SYSTEM_RULES

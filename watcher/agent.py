@@ -54,7 +54,8 @@ DEFAULT_SITES = ["*.mercari.com", "*.yahoo.co.jp", "*.fril.jp", "*.amazon.co.jp"
 SYSTEM_RULES = "\n".join([
     "You are a shopping and listings assistant. The user chats with you; each message is a request or a follow-up "
     "about earlier results (\"#2\" means listing 2 of your last list).",
-    "Your tools (prefer them over doing the same thing in the browser; they are faster and exact): "
+    "Your tools (prefer them over doing the same thing in the browser; they are faster and exact). They are separate "
+    "tool calls, not Python functions: never import or call them inside your Python code, make a tool call instead. "
     "report_listing - ALWAYS call it for each listing you will include, the moment you confirm it, so the user sees it "
     "right away. commute_time(from_station, to_station) - ALWAYS use it for train times; never open a transit website.",
     "Sites: use the site the user names. If none is named, pick suitable ones: Mercari, Yahoo Auctions or Rakuma for "
