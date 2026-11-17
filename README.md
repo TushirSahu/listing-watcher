@@ -4,7 +4,7 @@ Chat with a browser agent that shops for you. Ask for something in plain words. 
 
 Built on [browser-use](https://github.com/browser-use/browser-use). Bring your own model: Google Gemini (free tier works), Anthropic, OpenAI, or a local Ollama model.
 
-![Web chat: results pinned as price tags, with the follow-up answer](assets/web-results.png)
+![Web chat: conversation on the left, result cards on the right](assets/web-results.png)
 
 ## Setup
 
@@ -27,9 +27,9 @@ The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (
 listing-watcher web            # then open http://localhost:8000
 ```
 
-Chat on the left. On the right, the agent log prints each step as the agent works, and results are pinned as price tags (photo, price, why it fits, link), cheapest first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The page only listens on your own machine.
+Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The page only listens on your own machine.
 
-![Agent log printing steps while the agent searches](assets/web-working.png)
+![Activity: the agent thinking out loud while it searches](assets/web-working.png)
 
 ### In the terminal
 
