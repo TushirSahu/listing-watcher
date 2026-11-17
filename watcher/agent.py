@@ -54,7 +54,8 @@ SYSTEM_RULES = "\n".join([
     "used goods; Amazon.co.jp for new items; SUUMO for rentals. Read search results pages directly instead of "
     "fighting filter buttons; open the most promising listings to check condition and details.",
     "Rules: this is read-only. do NOT log in, buy, message sellers, or click purchase buttons.",
-    "Skip listings marked sold, reserved, or unavailable (SOLD / 売り切れ / 取引中).",
+    "Skip listings marked sold, reserved, or unavailable (SOLD / 売り切れ / 取引中). Broken or parts-only items "
+    "(ジャンク / junk / 動作未確認) never match unless the user asks for them.",
     "price = what the buyer actually pays per period, as an integer in yen: include mandatory recurring fees "
     "(rent + 管理費/共益費 for rentals; item + shipping if charged). One-time costs (敷金/礼金, agency fee) are not "
     "price: mention them in why_matches. Convert 万円 to yen (8.35万円 = 83500).",

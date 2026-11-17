@@ -32,6 +32,8 @@ def step_text(msg: str) -> str | None:
     n, code = m[1], m[2]
     if " -> " in code:
         what = "hit an error, retrying"
+    elif code.lstrip().startswith("#"):
+        what = code.lstrip("# ").strip()[:80] or "working"  # the model's own note on what this step does
     elif url := _URL.search(code):
         parts = urlsplit(url[1])
         query = parse_qs(parts.query)

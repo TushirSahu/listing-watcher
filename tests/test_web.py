@@ -181,3 +181,9 @@ def test_history_includes_last_steps():
             until(ws, "reply")
         with c.websocket_connect("/ws") as ws:
             assert ws.receive_json()["steps"] == ["step 1 · looking at the page"]
+
+
+def test_step_text_uses_code_comment():
+    assert step_text("step 3: # Search Mercari for WH-1000XM5 under budget") == \
+        "step 3 · Search Mercari for WH-1000XM5 under budget"
+    assert step_text("step 4: #") == "step 4 · working"
