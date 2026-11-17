@@ -4,21 +4,7 @@ Chat with a browser agent that shops for you. Ask for something in plain words. 
 
 Built on [browser-use](https://github.com/browser-use/browser-use). Bring your own model: Google Gemini (free tier works), Anthropic, OpenAI, or a local Ollama model.
 
-```
-you> used Sony WH-1000XM5 under ¥25,000, good condition, with case, on Mercari
-agent> Found 3 good options, cheapest first.
-  1. ¥19,666  ソニー WH-1000XM5 ケース付
-     Case included, light wear, under budget
-     https://jp.mercari.com/item/m85308644311
-  2. ¥19,999  【美品】ソニー WH-1000XM5 プラチナシルバー
-     Excellent condition per description, case included
-     https://jp.mercari.com/item/m88650713138
-
-you> check #2's description more closely
-agent> #2: seller says used ~10 times, no scratches, original box and cable included...
-
-you> /new
-```
+![Web chat: results pinned as price tags, with the follow-up answer](assets/web-results.png)
 
 ## Setup
 
@@ -34,6 +20,29 @@ cp .env.example .env      # choose a provider, paste your API key
 The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (never your logged-in sessions). No Chrome installed? `pip install playwright && playwright install chromium`.
 
 ## Use
+
+### In your browser
+
+```bash
+listing-watcher web            # then open http://localhost:8000
+```
+
+Chat on the left. On the right, the agent log prints each step as the agent works, and results are pinned as price tags (photo, price, why it fits, link), cheapest first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The page only listens on your own machine.
+
+![Agent log printing steps while the agent searches](assets/web-working.png)
+
+### In the terminal
+
+```
+you> used Sony WH-1000XM5 under 25000 yen with the case included, on Mercari
+agent> I found a used Sony WH-1000XM5 on Mercari for 18,900 yen that includes the original carrying case.
+  1. ¥18,900  SONY WH-1000XM5
+     The listing is for a used Sony WH-1000XM5 and explicitly states that the dedicated carrying case and charging cable are included.
+     https://jp.mercari.com/item/m56708452240
+
+you> check #1 more closely: condition, what is included, shipping
+agent> The item (#1) is a used Sony WH-1000XM5 priced at 18,900 yen. The seller includes the dedicated carrying case and charging cable. Shipping is included in the price via 'Yu-Yu Mercari Bin', and it is expected to be shipped within 4-7 days.
+```
 
 ```bash
 listing-watcher chat                  # browser runs hidden
