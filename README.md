@@ -27,7 +27,15 @@ The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (
 listing-watcher web            # then open http://localhost:8000
 ```
 
-Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The sun/moon button switches light and dark (it follows your system setting until you pick one). The page only listens on your own machine.
+Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos".
+
+- **Live results:** cards appear while the agent works (dashed = still being checked) and are replaced by the final list when it answers.
+- **Stop:** the send button turns into a red stop button while the agent works. Stopping keeps the cards found so far.
+- **History:** conversations are saved to `~/.listing-watcher/history.db` (change with `HISTORY_DB`). **History** lists them; opening one lets you continue where you left off (the agent gets a recap and may reopen pages). Delete the file to wipe your history.
+- **Cost:** each answer shows how many agent steps it took and what it cost.
+- **Commute times** for rentals come from a built-in lookup on Yahoo!乗換案内: say where you commute to.
+
+**New search** starts over. The sun/moon button switches light and dark (it follows your system setting until you pick one). The page only listens on your own machine.
 
 ![Activity: the agent thinking out loud while it searches](assets/web-working.png)
 

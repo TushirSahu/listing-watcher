@@ -5,7 +5,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium fonts-noto-cjk \
  && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --uid 10001 app
+RUN useradd --create-home --uid 10001 app && mkdir /data && chown app /data
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY watcher ./watcher
