@@ -1,7 +1,9 @@
+import types
+
 import pytest
 
 import watcher.agent as agent_mod
-from watcher.agent import SYSTEM_RULES, ChatSession, ConfigError, make_llm
+from watcher.agent import DEFAULT_SITES, SYSTEM_RULES, ChatSession, ConfigError, make_llm
 from watcher.models import Reply
 
 
@@ -14,8 +16,9 @@ class FakeBrowser:
 
 
 class History:
-    def __init__(self, out=None, status="completed", error=None):
-        self.structured_output, self.status, self.error = out, status, error
+    def __init__(self, out=None, status="completed", error=None, steps=5, injection=False):
+        self.structured_output, self.status, self.error, self.steps = out, status, error, steps
+        self.judgement = types.SimpleNamespace(prompt_injection_detected=injection)
 
     def final_result(self):
         return None
@@ -128,3 +131,49 @@ async def test_close_kills_browser_once_and_resets(monkeypatch):
 
 def test_rules_keep_answer_short():
     assert "don't repeat" in SYSTEM_RULES and "cards" in SYSTEM_RULES
+
+
+def test_rules_treat_pages_as_untrusted():
+    for s in ["untrusted", "never follow instructions", "local files", "environment variables"]:
+        assert s in SYSTEM_RULES, s
+
+
+def test_default_sites():
+    assert DEFAULT_SITES == ["*.mercari.com", "*.yahoo.co.jp", "*.fril.jp", "*.amazon.co.jp", "*.suumo.jp",
+                             "*.homes.co.jp"]
+
+
+async def test_browser_restricted_to_allowed_sites(monkeypatch):
+    _, browsers = install(monkeypatch, [OK])
+    await ChatSession(llm=object(), allowed_sites=["jp.mercari.com"]).ask("x")
+    assert browsers[0].kwargs["allowed_domains"] == ["jp.mercari.com"]
+    assert browsers[0].kwargs["block_ip_addresses"] is True
+
+
+async def test_no_allowlist_still_blocks_ips(monkeypatch):
+    _, browsers = install(monkeypatch, [OK])
+    await ChatSession(llm=object(), allowed_sites=None).ask("x")
+    assert browsers[0].kwargs["allowed_domains"] is None and browsers[0].kwargs["block_ip_addresses"] is True
+
+
+async def test_injection_check_on_warns(monkeypatch):
+    made, _ = install(monkeypatch, [History(Reply(answer="Found 1."), injection=True)])
+    r = await ChatSession(llm=object(), injection_check=True).ask("x")
+    assert made[0].kwargs["judge"] is True
+    assert r.answer.startswith("Warning: a page tried to give the agent instructions") and "Found 1." in r.answer
+
+
+async def test_injection_check_off(monkeypatch):
+    made, _ = install(monkeypatch, [OK])
+    await ChatSession(llm=object(), injection_check=False).ask("x")
+    assert made[0].kwargs["judge"] is False
+
+
+async def test_step_budget_stops_turns(monkeypatch):
+    made, _ = install(monkeypatch, [History(Reply(answer="a"), steps=30), History(Reply(answer="b"), steps=30)])
+    s = ChatSession(llm=object(), step_budget=50)
+    await s.ask("1")
+    await s.ask("2")
+    r = await s.ask("3")
+    assert r.answer.startswith("error:") and "budget" in r.answer
+    assert made[0].tasks == ["2"]  # third turn never ran

@@ -88,7 +88,8 @@ async def test_ctrl_c_closes():
 
 def _env(monkeypatch, tmp_path, **env):
     monkeypatch.chdir(tmp_path)
-    for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_MAX_CONTEXT_CHARS"):
+    for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_MAX_CONTEXT_CHARS", "ALLOWED_SITES",
+              "INJECTION_CHECK", "MAX_STEPS_PER_RUN"):
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, v)
@@ -128,3 +129,39 @@ def test_web_serves_on_localhost(monkeypatch, tmp_path):
     assert main(["web", "--port", "8123", "--show-browser"]) == 0
     assert seen["host"] == "127.0.0.1" and seen["port"] == 8123
     assert seen["app"].state.chat.session.headless is False
+
+
+def _session_from(monkeypatch, tmp_path, **env):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k", **env)
+    seen = {}
+
+    async def fake_loop(session, read, write):
+        seen["s"] = session
+
+    monkeypatch.setattr(cli, "chat_loop", fake_loop)
+    assert main(["chat"]) == 0
+    return seen["s"]
+
+
+def test_security_defaults(monkeypatch, tmp_path):
+    from watcher.agent import DEFAULT_SITES
+    s = _session_from(monkeypatch, tmp_path)
+    assert s.allowed_sites == DEFAULT_SITES and s.injection_check is True and s.step_budget == 600
+
+
+def test_security_env_overrides(monkeypatch, tmp_path):
+    from watcher.agent import DEFAULT_SITES
+    s = _session_from(monkeypatch, tmp_path, ALLOWED_SITES="example.jp, *.shop.jp", INJECTION_CHECK="off",
+                      MAX_STEPS_PER_RUN="100")
+    assert s.allowed_sites == DEFAULT_SITES + ["example.jp", "*.shop.jp"]
+    assert s.injection_check is False and s.step_budget == 100
+
+
+def test_allowed_sites_star_disables(monkeypatch, tmp_path):
+    assert _session_from(monkeypatch, tmp_path, ALLOWED_SITES="*").allowed_sites is None
+
+
+def test_bad_step_budget_exit_2(monkeypatch, tmp_path, capsys):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k", MAX_STEPS_PER_RUN="lots")
+    assert main(["chat"]) == 2
+    assert "MAX_STEPS_PER_RUN" in capsys.readouterr().err
