@@ -213,3 +213,9 @@ async def test_last_turn_steps_and_cost(monkeypatch):
     s = ChatSession(llm=object())
     await s.ask("x")
     assert s.last_steps == 17 and s.last_cost == 0.0042
+
+
+def test_rules_lead_with_tools():
+    tools_at = SYSTEM_RULES.index("Your tools")
+    assert tools_at < SYSTEM_RULES.index("Search URLs")
+    assert "ALWAYS" in SYSTEM_RULES[tools_at:tools_at + 600]
