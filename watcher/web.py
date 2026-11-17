@@ -72,12 +72,7 @@ async def _is_public_https(url: str, resolve) -> bool:
     if parts.scheme != "https" or not parts.hostname:
         return False
     try:
-        ip = ipaddress.ip_address(parts.hostname)
-        return ip.is_global
-    except ValueError:
-        pass
-    try:
-        addrs = await resolve(parts.hostname)
+        addrs = await resolve(parts.hostname)  # an IP literal resolves to itself
         return bool(addrs) and all(ipaddress.ip_address(a).is_global for a in addrs)
     except Exception:
         return False
@@ -98,8 +93,6 @@ async def fill_images(items: list[dict], transport: httpx.AsyncBaseTransport | N
     """Fill missing image_url from each listing page's og:image / twitter:image (models often skip photos).
     The URLs come from model output, so only public https pages are fetched and redirects aren't followed."""
     missing = [i for i in items if not i.get("image_url")]
-    if not missing:
-        return
     resolve = resolve or _system_resolve
     # note: DNS is checked before the request, not pinned for it (small rebinding window); fine for a local tool
     async with httpx.AsyncClient(timeout=6, follow_redirects=False, transport=transport,

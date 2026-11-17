@@ -50,8 +50,6 @@ def make_llm(provider: str, model: str, env: Mapping[str, str]) -> object:
 # Sites the agent's browser may open (browser-use patterns: '*.x.com' = x.com and subdomains).
 DEFAULT_SITES = ["*.mercari.com", "*.yahoo.co.jp", "*.fril.jp", "*.amazon.co.jp", "*.suumo.jp", "*.homes.co.jp"]
 
-INJECTION_WARNING = "Warning: a page tried to give the agent instructions. Double-check this answer.\n\n"
-
 SYSTEM_RULES = "\n".join([
     "You are a shopping and listings assistant. The user chats with you; each message is a request or a follow-up "
     "about earlier results (\"#2\" means listing 2 of your last list).",
@@ -133,7 +131,7 @@ class ChatSession:
             reply = Reply.model_validate(out)
             judgement = getattr(history, "judgement", None)
             if judgement is not None and judgement.prompt_injection_detected:
-                reply.answer = INJECTION_WARNING + reply.answer
+                reply.answer = "Warning: a page tried to give the agent instructions. Double-check this answer.\n\n" + reply.answer
             return reply
         except Exception as e:  # a failed turn is reported; the conversation goes on
             return Reply(answer=f"error: {type(e).__name__}: {e}"[:400])
