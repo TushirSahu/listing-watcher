@@ -183,3 +183,10 @@ def test_rules_compare_sites_and_commute():
     for s in ["Yahoo Auctions", "Rakuma", "compare", "cheapest site", "transit.yahoo.co.jp", "commute"]:
         assert s in SYSTEM_RULES, s
     assert "*.yahoo.co.jp" in DEFAULT_SITES  # transit.yahoo.co.jp is reachable
+
+
+def test_rules_give_direct_search_urls():
+    for u in ["https://jp.mercari.com/search?keyword=", "https://auctions.yahoo.co.jp/search/search?p=",
+              "https://paypayfleamarket.yahoo.co.jp/search/", "https://fril.jp/s?query=",
+              "https://transit.yahoo.co.jp/search/result?from="]:
+        assert u in SYSTEM_RULES, u

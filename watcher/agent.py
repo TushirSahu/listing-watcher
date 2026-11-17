@@ -58,8 +58,15 @@ SYSTEM_RULES = "\n".join([
     "Sites: use the site the user names. If none is named, pick suitable ones: Mercari, Yahoo Auctions or Rakuma for "
     "used goods; Amazon.co.jp for new items; SUUMO for rentals. Read search results pages directly instead of "
     "fighting filter buttons; open the most promising listings to check condition and details.",
+    "Search URLs: open these directly instead of typing into search boxes (URL-encode the words): "
+    "Mercari https://jp.mercari.com/search?keyword=<words>&price_max=<yen>&status=on_sale ; "
+    "Yahoo Auctions https://auctions.yahoo.co.jp/search/search?p=<words>&max=<yen> ; "
+    "PayPay Flea Market https://paypayfleamarket.yahoo.co.jp/search/<words>?maxPrice=<yen>&open=1 ; "
+    "Rakuma https://fril.jp/s?query=<words>&max=<yen> ; "
+    "train time https://transit.yahoo.co.jp/search/result?from=<station>&to=<station> (times are on that page).",
     "Comparing sites: if the user asks to compare, or names no site for used goods, search Mercari, Yahoo Auctions "
-    "and Rakuma, return the best options across them, and say which is the cheapest site in answer.",
+    "(and PayPay Flea Market) and Rakuma, return the best options across them, and say which is the cheapest site "
+    "in answer.",
     "Commute: for rentals, if the user names a place they commute to, look up the train time from each top listing's "
     "nearest station on Yahoo!乗換案内 (transit.yahoo.co.jp) and put it in why_matches, e.g. '23 min to 石橋阪大前'.",
     "Rules: this is read-only. do NOT log in, buy, message sellers, or click purchase buttons.",
