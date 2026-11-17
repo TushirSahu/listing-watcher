@@ -55,7 +55,7 @@ How results are kept honest:
 
 Every agent step is one model call, and a request usually takes 10–40 steps. A small, fast model is enough.
 
-**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google` and `LLM_MODEL=gemini-flash-lite-latest` (or another lite model). The free tier has per-minute limits on requests and tokens. The agent retries rate-limit errors automatically, so a turn may pause for a bit. Big pages (SUUMO) can hit the token limit; set `LLM_MAX_CONTEXT_CHARS=60000` in `.env`. Free lite models are sometimes careless with titles; a paid model (Gemini Flash, Claude Haiku, GPT mini) gives more consistent results.
+**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google` and `LLM_MODEL=gemini-flash-lite-latest` (or another lite model). The free tier has per-minute limits on requests and tokens. The agent retries rate-limit errors automatically, so a turn may pause for a bit. Big pages (SUUMO) can hit the token limit; set `LLM_MAX_CONTEXT_CHARS=60000` in `.env`. Free lite models are sometimes careless with titles; a paid model (e.g. Gemini Flash or GPT mini) gives more consistent results.
 
 **Ollama is best-effort.** Small local models often get lost on real sites.
 
