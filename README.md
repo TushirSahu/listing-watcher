@@ -27,7 +27,7 @@ The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (
 listing-watcher web            # then open http://localhost:8000
 ```
 
-Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The page only listens on your own machine.
+Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos". **New search** starts over. The sun/moon button switches light and dark (it follows your system setting until you pick one). The page only listens on your own machine.
 
 ![Activity: the agent thinking out loud while it searches](assets/web-working.png)
 
