@@ -27,7 +27,7 @@ The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (
 listing-watcher web            # then open http://localhost:8000
 ```
 
-Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as cards (photo, price, why it fits, link), lowest price first. Ask follow-ups by number: "check #2's photos".
+Chat on the left. On the right, Activity shows each step as the agent works (its own notes on what it is trying), and results appear as numbered cards (photo, price, why it fits, link) that match the numbers the agent uses in its answer. Ask follow-ups by number: "check #2's photos".
 
 - **Live results:** cards appear while the agent works (dashed = still being checked) and are replaced by the final list when it answers.
 - **Stop:** the send button turns into a red stop button while the agent works. Stopping keeps the cards found so far.

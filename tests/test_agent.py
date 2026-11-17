@@ -223,3 +223,21 @@ def test_rules_lead_with_tools():
 
 def test_rules_say_tools_are_not_python():
     assert "not Python functions" in SYSTEM_RULES and "tool call" in SYSTEM_RULES
+
+
+def test_friendly_errors():
+    from watcher.agent import friendly_error
+    assert friendly_error("ModelUnavailableError: status_code: 503, body: {...}").startswith(
+        "error: The AI model is overloaded right now")
+    assert "quota" in friendly_error("ModelRateLimitError: status_code: 429 ...")
+    assert friendly_error("RuntimeError: boom") == "error: RuntimeError: boom"
+
+
+async def test_overload_error_is_friendly(monkeypatch):
+    install(monkeypatch, [RuntimeError("ModelUnavailableError: status_code: 503 overloaded")])
+    r = await ChatSession(llm=object()).ask("x")
+    assert r.answer.startswith("error: The AI model is overloaded right now")
+
+
+def test_rules_order_cheapest_first():
+    assert "cheapest first" in SYSTEM_RULES

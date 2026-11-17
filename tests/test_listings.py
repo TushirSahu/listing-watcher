@@ -19,9 +19,16 @@ def test_normalize_key():
     assert normalize_key("") is None and normalize_key(None) is None
 
 
-def test_clean_sorted_cheapest_first():
+def test_clean_keeps_agent_order():
+    # the agent refers to listings as #1, #2…; reordering would make its numbers point at the wrong card
     out = clean_listings([lst("https://x.jp/1", 300), lst("https://x.jp/2", None), lst("https://x.jp/3", 100)])
-    assert [i.url for i in out] == ["https://x.jp/3", "https://x.jp/1", "https://x.jp/2"]
+    assert [i.url for i in out] == ["https://x.jp/1", "https://x.jp/2", "https://x.jp/3"]
+
+
+def test_key_duplicate_keeps_first_position_cheapest_item():
+    out = clean_listings([lst("https://x.jp/a", 61000, key="B 2F"), lst("https://x.jp/n", 5),
+                          lst("https://x.jp/c", 59000, key="b 2f")])
+    assert [(i.url, i.price) for i in out] == [("https://x.jp/c", 59000), ("https://x.jp/n", 5)]
 
 
 def test_clean_drops_non_matching():

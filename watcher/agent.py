@@ -48,6 +48,15 @@ def make_llm(provider: str, model: str, env: Mapping[str, str]) -> object:
     return ChatOpenAI(model=model, base_url=f"{host}/v1", api_key="ollama")
 
 
+def friendly_error(reason: str) -> str:
+    """Turn provider errors into something a person can act on."""
+    if "503" in reason or "UNAVAILABLE" in reason:
+        return "error: The AI model is overloaded right now (503). Try again in a minute, or use another model."
+    if "429" in reason or "RESOURCE_EXHAUSTED" in reason:
+        return "error: Hit the model's rate limit or quota (429). Wait a minute, or use another model or a paid key."
+    return f"error: {reason}"[:400]
+
+
 # Sites the agent's browser may open (browser-use patterns: '*.x.com' = x.com and subdomains).
 DEFAULT_SITES = ["*.mercari.com", "*.yahoo.co.jp", "*.fril.jp", "*.amazon.co.jp", "*.suumo.jp", "*.homes.co.jp"]
 
@@ -88,6 +97,7 @@ SYSTEM_RULES = "\n".join([
     "else fits and say what is unconfirmed in why_matches. Reject only when the listing contradicts the request.",
     "url must be the listing's own detail page as a full https link; never javascript: or # links. "
     "image_url = the listing's main photo as a full https link (its <img> src), or null.",
+    "Order listings cheapest first; the user refers to them by that number (#1 = first).",
     "Reply with a short answer in English (2-4 sentences). Listings are shown to the user as cards, so don't repeat "
     "their titles, prices or links in answer; refer to them by number (#1, #2). Put listings in listings only when you are showing results "
     "(matches true for ones that fit); for questions about one listing, answer in answer and leave listings empty.",
@@ -137,14 +147,14 @@ class ChatSession:
             if out is None:
                 # browser-use 1.0 reports bad keys, timeouts, step limits via status/error instead of raising
                 reason = history.error or history.final_result() or "no structured result"
-                return Reply(answer=f"error: agent run {history.status}: {reason}"[:400])
+                return Reply(answer=friendly_error(f"agent run {history.status}: {reason}"))
             reply = Reply.model_validate(out)
             judgement = getattr(history, "judgement", None)
             if judgement is not None and judgement.prompt_injection_detected:
                 reply.answer = "Warning: a page tried to give the agent instructions. Double-check this answer.\n\n" + reply.answer
             return reply
         except Exception as e:  # a failed turn is reported; the conversation goes on
-            return Reply(answer=f"error: {type(e).__name__}: {e}"[:400])
+            return Reply(answer=friendly_error(f"{type(e).__name__}: {e}"))
 
     async def close(self) -> None:
         if self.browser is not None:

@@ -336,6 +336,7 @@ function showEmpty() {
   tags.replaceChildren(box);
 }
 
+let lowestPrice = null;
 function startStreaming() {
   tags.className = "cards";
   tags.replaceChildren();
@@ -349,8 +350,10 @@ function addStreamCard(l, n) {
 function showTags(listings) {
   if (!listings.length) { if (tags.className === "cards" && !tags.children.length) showEmpty(); return; }
   $("tags-title").textContent = "Results";
-  $("tags-meta").textContent = `${listings.length} · lowest price first`;
+  $("tags-meta").textContent = `${listings.length} · numbered as the agent refers to them`;
   tags.className = "cards";
+  const prices = listings.map((l) => l.price).filter((p) => p != null);
+  lowestPrice = prices.length ? Math.min(...prices) : null;
   tags.replaceChildren(...listings.map((l, i) => makeCard(l, i, listings.length, false)));
 }
 function makeCard(l, i, total, provisional) {
@@ -368,7 +371,7 @@ function makeCard(l, i, total, provisional) {
     const body = el("div", "body");
     const row = el("div", "price-row");
     row.append(el("span", "price", yen(l.price)));
-    if (!provisional && i === 0 && l.price != null && total > 1) row.append(el("span", "lowest", "lowest"));
+    if (!provisional && total > 1 && l.price != null && l.price === lowestPrice) row.append(el("span", "lowest", "lowest"));
     body.append(row, el("h3", "title", l.title));
     const why = el("p", "why", l.why_matches);
     if (!l.verified) why.append(" ", el("span", "unverified", "· not opened"));

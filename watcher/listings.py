@@ -28,23 +28,26 @@ def _cheaper(a: Listing, b: Listing) -> bool:
 
 
 def clean_listings(items: list[Listing], base: str | None = None) -> list[Listing]:
-    """Matching listings with real links, one per link and per item_key (cheapest wins), cheapest first."""
+    """Matching listings with real links, one per link and per item_key (cheapest wins), in the agent's order:
+    the agent refers to them as #1, #2…, so reordering would make its numbers point at the wrong card."""
     self_url = normalize_url(base) if base else None
-    by_url: dict[str, Listing] = {}
+    out: list[Listing] = []
+    seen_urls: set[str] = set()
+    key_pos: dict[str, int] = {}
     for item in items:
         if not item.matches:
             continue
         url = normalize_url(item.url, base)
-        if not url.startswith(("http://", "https://")) or url == self_url:
+        if not url.startswith(("http://", "https://")) or url == self_url or url in seen_urls:
             continue  # javascript:/# links (or the search page itself) aren't a listing
-        by_url.setdefault(url, item.model_copy(update={"url": url}))
-    by_key: dict[str, Listing] = {}
-    out: list[Listing] = []
-    for item in by_url.values():
+        seen_urls.add(url)
+        item = item.model_copy(update={"url": url})
         key = normalize_key(item.item_key)
-        if key is None:
-            out.append(item)
-        elif key not in by_key or _cheaper(item, by_key[key]):
-            by_key[key] = item
-    out += by_key.values()
-    return sorted(out, key=lambda i: (i.price is None, i.price or 0))
+        if key in key_pos:
+            if _cheaper(item, out[key_pos[key]]):
+                out[key_pos[key]] = item
+            continue
+        if key:
+            key_pos[key] = len(out)
+        out.append(item)
+    return out
