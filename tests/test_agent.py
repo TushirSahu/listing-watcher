@@ -75,7 +75,7 @@ def test_google_retries_rate_limits():
 
 
 def test_rules_cover_essentials():
-    for s in ["管理費", "万円", "item_key", "javascript", "not stated", "Mercari", "SUUMO", "do NOT log in", "sold"]:
+    for s in ["管理費", "万円", "item_key", "javascript", "not stated", "Mercari", "SUUMO", "do NOT log in", "sold", "image_url"]:
         assert s in SYSTEM_RULES, s
 
 

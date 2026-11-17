@@ -119,3 +119,12 @@ def test_main_runs_loop_with_cap(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "chat_loop", fake_loop)
     assert main(["chat", "--show-browser"]) == 0
     assert seen == {"cap": 60000, "headless": False}
+
+
+def test_web_serves_on_localhost(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
+    seen = {}
+    monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(host=host, port=port, app=app))
+    assert main(["web", "--port", "8123", "--show-browser"]) == 0
+    assert seen["host"] == "127.0.0.1" and seen["port"] == 8123
+    assert seen["app"].state.chat.session.headless is False

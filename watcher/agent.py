@@ -62,7 +62,8 @@ SYSTEM_RULES = "\n".join([
     "(e.g. 'Maison Suita 3F 1K 25m2'); marketplace items seller + exact title. null if unsure.",
     "If a requirement is simply not stated on a listing, do not reject it for that: set matches true if everything "
     "else fits and say what is unconfirmed in why_matches. Reject only when the listing contradicts the request.",
-    "url must be the listing's own detail page as a full https link; never javascript: or # links.",
+    "url must be the listing's own detail page as a full https link; never javascript: or # links. "
+    "image_url = the listing's main photo as a full https link (its <img> src), or null.",
     "Reply with a short answer in English. Put listings in listings only when you are showing results "
     "(matches true for ones that fit); for questions about one listing, answer in answer and leave listings empty.",
 ])
