@@ -101,7 +101,7 @@ async def fill_images(items: list[dict], transport: httpx.AsyncBaseTransport | N
     if not missing:
         return
     resolve = resolve or _system_resolve
-    # ponytail: DNS is checked before the request, not pinned for it (rebinding window); fine for a local tool
+    # note: DNS is checked before the request, not pinned for it (small rebinding window); fine for a local tool
     async with httpx.AsyncClient(timeout=6, follow_redirects=False, transport=transport,
                                  headers={"User-Agent": "Mozilla/5.0"}) as client:
         found = await asyncio.gather(*(_image_of(client, i["url"], resolve) for i in missing))
