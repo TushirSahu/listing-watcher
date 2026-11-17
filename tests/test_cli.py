@@ -88,6 +88,7 @@ async def test_ctrl_c_closes():
 
 def _env(monkeypatch, tmp_path, **env):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HISTORY_DB", str(tmp_path / "history.db"))  # never touch the real ~/.listing-watcher
     for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_MAX_CONTEXT_CHARS", "ALLOWED_SITES",
               "INJECTION_CHECK", "MAX_STEPS_PER_RUN"):
         monkeypatch.delenv(k, raising=False)
@@ -173,3 +174,12 @@ def test_web_host_flag(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(host=host))
     assert main(["web", "--host", "0.0.0.0"]) == 0
     assert seen["host"] == "0.0.0.0"
+
+
+def test_web_uses_history_db(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
+    monkeypatch.setenv("HISTORY_DB", str(tmp_path / "x" / "h.db"))
+    seen = {}
+    monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(app=app))
+    assert main(["web"]) == 0
+    assert (tmp_path / "x" / "h.db").exists()

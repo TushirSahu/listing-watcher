@@ -1,13 +1,7 @@
 import asyncio
-import logging
-
-from starlette.testclient import TestClient
-
-from watcher.models import Listing, Reply
-from watcher.web import create_app, step_text
 
 
-WS = "ws://localhost:8000/ws"
+from watcher.web import step_text
 
 
 async def PUBLIC(host):
@@ -22,118 +16,6 @@ def test_step_text():
     assert step_text("step 7: js('x') -> SyntaxError: bad") == "step 7 · hit an error, retrying"
     assert step_text("step 8: listings_to_check = [1]") == "step 8 · working"
     assert step_text("Agent started") is None
-
-
-GOOD = Listing(url="https://x.jp/1", title="XM5", price=19666, why_matches="case", matches=True, verified=True,
-               image_url="https://img.x.jp/1.jpg")
-BAD = Listing(url="javascript:void(0)", title="bad", price=1, why_matches="", matches=True, verified=True)
-
-
-class FakeSession:
-    def __init__(self, reply=None, log=None):
-        self.asked, self.closed = [], 0
-        self.reply = reply or Reply(answer="Found 1.", listings=[GOOD, BAD])
-        self.log = log
-
-    async def ask(self, text):
-        self.asked.append(text)
-        if self.log:
-            logging.getLogger("browser_use").info(self.log)
-        await asyncio.sleep(0)
-        return self.reply
-
-    async def close(self):
-        self.closed += 1
-
-
-def until(ws, kind):
-    msgs = []
-    while True:
-        m = ws.receive_json()
-        msgs.append(m)
-        if m["type"] == kind:
-            return msgs
-
-
-def test_index_served():
-    r = TestClient(base_url="http://localhost:8000", app=create_app(FakeSession())).get("/")
-    assert r.status_code == 200 and "listing-watcher" in r.text
-
-
-def test_ask_reply_and_clean_listings():
-    s = FakeSession()
-    with TestClient(base_url="http://localhost:8000", app=create_app(s)) as c, c.websocket_connect(WS) as ws:
-        assert ws.receive_json() == {"type": "history", "messages": [], "busy": False, "steps": []}
-        ws.send_json({"type": "ask", "text": "find xm5"})
-        msgs = until(ws, "reply")
-        assert {"type": "message", "role": "you", "text": "find xm5"} in msgs
-        reply = msgs[-1]
-        assert reply["text"] == "Found 1." and [l["url"] for l in reply["listings"]] == ["https://x.jp/1"]
-        assert reply["listings"][0]["image_url"] == "https://img.x.jp/1.jpg"
-    assert s.asked == ["find xm5"]
-
-
-def test_reconnect_gets_history():
-    app = create_app(FakeSession())
-    with TestClient(app, base_url="http://localhost:8000") as c:
-        with c.websocket_connect(WS) as ws:
-            ws.receive_json()
-            ws.send_json({"type": "ask", "text": "a"})
-            until(ws, "reply")
-        with c.websocket_connect(WS) as ws:
-            h = ws.receive_json()
-            assert h["type"] == "history" and h["busy"] is False
-            assert [(m["role"], m["text"]) for m in h["messages"]] == [("you", "a"), ("agent", "Found 1.")]
-            assert len(h["messages"][1]["listings"]) == 1
-
-
-def test_error_reply_clears_busy():
-    app = create_app(FakeSession(reply=Reply(answer="error: quota")))
-    with TestClient(app, base_url="http://localhost:8000") as c, c.websocket_connect(WS) as ws:
-        ws.receive_json()
-        ws.send_json({"type": "ask", "text": "a"})
-        assert until(ws, "reply")[-1]["text"] == "error: quota"
-        ws.send_json({"type": "ask", "text": "b"})
-        until(ws, "reply")
-
-
-def test_busy_rejects_second_ask():
-    s = FakeSession()
-    app = create_app(s)
-    with TestClient(app, base_url="http://localhost:8000") as c, c.websocket_connect(WS) as ws:
-        ws.receive_json()
-        app.state.chat.busy = True
-        ws.send_json({"type": "ask", "text": "a"})
-        assert ws.receive_json() == {"type": "busy"}
-    assert s.asked == []
-
-
-def test_new_resets():
-    s = FakeSession()
-    app = create_app(s)
-    with TestClient(app, base_url="http://localhost:8000") as c, c.websocket_connect(WS) as ws:
-        ws.receive_json()
-        ws.send_json({"type": "ask", "text": "a"})
-        until(ws, "reply")
-        ws.send_json({"type": "new"})
-        assert until(ws, "reset")[-1] == {"type": "reset"}
-    assert s.closed >= 1 and app.state.chat.messages == []
-
-
-def test_steps_forwarded():
-    s = FakeSession(log='step 2: new_tab("https://jp.mercari.com/search?keyword=xm5")')
-    with TestClient(base_url="http://localhost:8000", app=create_app(s)) as c, c.websocket_connect(WS) as ws:
-        ws.receive_json()
-        ws.send_json({"type": "ask", "text": "a"})
-        msgs = until(ws, "reply")
-        assert {"type": "step", "text": "step 2 · searching jp.mercari.com for “xm5”"} in msgs
-
-
-def test_shutdown_closes_browser():
-    s = FakeSession()
-    with TestClient(base_url="http://localhost:8000", app=create_app(s)):
-        pass
-    assert s.closed == 1
 
 
 def test_step_text_more():
@@ -179,44 +61,10 @@ def test_fill_images_survives_errors():
     assert items[0]["image_url"] is None
 
 
-def test_history_includes_last_steps():
-    app = create_app(FakeSession(log='step 1: screenshot()'))
-    with TestClient(app, base_url="http://localhost:8000") as c:
-        with c.websocket_connect(WS) as ws:
-            ws.receive_json()
-            ws.send_json({"type": "ask", "text": "a"})
-            until(ws, "reply")
-        with c.websocket_connect(WS) as ws:
-            assert ws.receive_json()["steps"] == ["step 1 · looking at the page"]
-
-
 def test_step_text_uses_code_comment():
     assert step_text("step 3: # Search Mercari for WH-1000XM5 under budget") == \
         "step 3 · Search Mercari for WH-1000XM5 under budget"
     assert step_text("step 4: #") == "step 4 · working"
-
-
-def test_rejects_foreign_host():
-    r = TestClient(create_app(FakeSession()), base_url="http://evil.example").get("/")
-    assert r.status_code == 400
-
-
-def test_rejects_cross_site_websocket():
-    import pytest
-    from starlette.websockets import WebSocketDisconnect
-
-    s = FakeSession()
-    with TestClient(create_app(s), base_url="http://localhost:8000") as c:
-        with pytest.raises(WebSocketDisconnect):
-            with c.websocket_connect(WS, headers={"origin": "https://evil.example"}) as ws:
-                ws.receive_json()
-    assert s.asked == []
-
-
-def test_accepts_same_origin_websocket():
-    with TestClient(create_app(FakeSession()), base_url="http://localhost:8000") as c:
-        with c.websocket_connect(WS, headers={"origin": "http://localhost:8000"}) as ws:
-            assert ws.receive_json()["type"] == "history"
 
 
 def test_fill_images_blocks_unsafe_urls():

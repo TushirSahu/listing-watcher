@@ -103,6 +103,8 @@ class ChatSession:
         self.allowed_sites, self.injection_check = allowed_sites, injection_check
         self.step_budget, self.steps_used = step_budget, 0  # caps model spend per server run
         self.on_listing = on_listing  # called with each listing the agent reports mid-turn (streaming)
+        self.last_steps: int | None = None
+        self.last_cost: float | None = None
         self.agent = self.browser = None
 
     async def ask(self, text: str) -> Reply:
@@ -126,7 +128,8 @@ class ChatSession:
             else:
                 self.agent.add_new_task(text)
             history = await self.agent.run(max_steps=MAX_STEPS)
-            self.steps_used += getattr(history, "steps", 0) or 0
+            self.last_steps, self.last_cost = getattr(history, "steps", None), getattr(history, "cost_usd", None)
+            self.steps_used += self.last_steps or 0
             out = history.structured_output
             if out is None:
                 # browser-use 1.0 reports bad keys, timeouts, step limits via status/error instead of raising

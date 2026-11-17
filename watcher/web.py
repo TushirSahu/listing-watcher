@@ -15,6 +15,7 @@ from starlette.responses import FileResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from watcher.history import History, recap
 from watcher.listings import clean_listings
 from watcher.models import Reply
 
@@ -102,16 +103,32 @@ async def fill_images(items: list[dict], transport: httpx.AsyncBaseTransport | N
         item["image_url"] = image
 
 
-class Chat:
-    """One shared conversation: the agent session, history, connected pages, busy flag."""
+PROTOCOL = 1
 
-    def __init__(self, session):
-        self.session = session
-        self.messages: list[dict] = []
-        self.steps: list[str] = []  # feed lines of the current/last turn
+
+class Chat:
+    """The shared conversation: agent session, saved history, connected pages, the running turn.
+    Event protocol v1: every event is {"v": 1, "type": ..., "conv": id, ...}; unknown client types are ignored."""
+
+    def __init__(self, session, history: History):
+        self.session, self.history = session, history
+        self.session.on_listing = self.on_listing
         self.sockets: set[WebSocket] = set()
-        self.busy = False
-        self.loop: asyncio.AbstractEventLoop | None = None
+        self.busy, self.task, self.loop = False, None, None
+        self.steps: list[str] = []          # feed lines of the current/last turn
+        self.streamed: list[dict] = []      # provisional cards of the current turn
+        self.load(history.latest())
+
+    def load(self, conv: str | None) -> None:
+        self.conv = conv
+        self.messages = self.history.messages(conv) if conv else []
+        self.needs_recap = bool(self.messages)  # a fresh agent must be told what came before
+
+    def event(self, type_: str, **fields) -> dict:
+        return {"v": PROTOCOL, "type": type_, "conv": self.conv, **fields}
+
+    def state(self) -> dict:
+        return self.event("history", messages=self.messages, busy=self.busy, steps=self.steps)
 
     async def broadcast(self, msg: dict) -> None:
         for ws in list(self.sockets):
@@ -120,32 +137,63 @@ class Chat:
             except Exception:
                 self.sockets.discard(ws)
 
+    def _emit_soon(self, msg: dict) -> None:
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: self.loop.create_task(self.broadcast(msg)))
+
     def on_step(self, text: str) -> None:
-        if self.busy and self.loop:
+        if self.busy:
             self.steps.append(text)
-            self.loop.call_soon_threadsafe(
-                lambda: self.loop.create_task(self.broadcast({"type": "step", "text": text}))
-            )
+            self._emit_soon(self.event("step", text=text))
+
+    def on_listing(self, item) -> int | None:
+        if not self.busy:
+            return None
+        self.streamed.append(item.model_dump())
+        n = len(self.streamed)
+        self._emit_soon(self.event("listing", listing=self.streamed[-1], n=n))
+        return n
+
+    def start(self, text: str) -> None:
+        if self.conv is None:
+            self.conv, self.messages, self.needs_recap = self.history.new_conversation(text), [], False
+        self.busy, self.steps, self.streamed = True, [], []
+        self.task = asyncio.create_task(self.turn(text))  # own task: closing the page doesn't stop it
 
     async def turn(self, text: str) -> None:
-        self.busy, self.loop, self.steps = True, asyncio.get_running_loop(), []
-        self.messages.append({"role": "you", "text": text, "listings": []})
-        await self.broadcast({"type": "message", "role": "you", "text": text})
+        self.loop = asyncio.get_running_loop()
+        self.history.add_message(self.conv, "you", text)
+        self.messages.append({"role": "you", "text": text, "listings": [], "steps": None, "cost": None})
+        await self.broadcast(self.event("message", role="you", text=text))
+        prompt = f"{recap(self.messages[:-1])}\n\nNew message: {text}" if self.needs_recap else text
         try:
-            reply = await self.session.ask(text)
+            reply = await self.session.ask(prompt)
+            self.needs_recap = False
+        except asyncio.CancelledError:
+            await self.session.close()  # agent state is unknown after a cancel; next turn starts fresh
+            self.needs_recap = True
+            self._finish("Cancelled.", [], None, None)
+            await self.broadcast(self.event("cancelled"))
+            return
         except Exception as e:  # ChatSession shouldn't raise; keep the page usable if it does
             reply = Reply(answer=f"error: {type(e).__name__}: {e}")
-        await asyncio.sleep(0)  # let queued step lines go out before the reply
+        await asyncio.sleep(0)  # let queued step/listing events go out before the reply
         listings = [item.model_dump() for item in clean_listings(reply.listings)]
         await fill_images(listings)
-        self.messages.append({"role": "agent", "text": reply.answer, "listings": listings})
-        self.busy = False
-        await self.broadcast({"type": "reply", "text": reply.answer, "listings": listings})
+        steps, cost = getattr(self.session, "last_steps", None), getattr(self.session, "last_cost", None)
+        self._finish(reply.answer, listings, steps, cost)
+        await self.broadcast(self.event("reply", text=reply.answer, listings=listings, steps=steps, cost=cost))
 
-    async def reset(self) -> None:
+    def _finish(self, text: str, listings: list[dict], steps, cost) -> None:
+        self.history.add_message(self.conv, "agent", text, listings, steps, cost)
+        self.messages.append({"role": "agent", "text": text, "listings": listings, "steps": steps, "cost": cost})
+        self.busy, self.task = False, None
+
+    async def switch(self, conv: str | None) -> None:
         await self.session.close()
-        self.messages, self.steps = [], []
-        await self.broadcast({"type": "reset"})
+        self.load(conv)
+        self.steps, self.streamed = [], []
+        await self.broadcast(self.state() if conv else self.event("reset"))
 
 
 class _StepHandler(logging.Handler):
@@ -158,8 +206,8 @@ class _StepHandler(logging.Handler):
             self.chat.on_step(text)
 
 
-def create_app(session) -> Starlette:
-    chat = Chat(session)
+def create_app(session, history: History | None = None) -> Starlette:
+    chat = Chat(session, history or History())
     log = logging.getLogger("browser_use")
     for h in log.handlers:  # keep the terminal quiet; steps go to the page instead
         h.setLevel(logging.WARNING)
@@ -177,20 +225,29 @@ def create_app(session) -> Starlette:
             return
         await ws.accept()
         chat.sockets.add(ws)
-        await ws.send_json({"type": "history", "messages": chat.messages, "busy": chat.busy, "steps": chat.steps})
+        await ws.send_json(chat.state())
         try:
             while True:
                 msg = await ws.receive_json()
-                if msg.get("type") == "ask" and (text := str(msg.get("text", "")).strip()):
+                kind = msg.get("type") if isinstance(msg, dict) else None
+                if kind == "ask" and (text := str(msg.get("text", "")).strip()):
                     if chat.busy:
-                        await ws.send_json({"type": "busy"})
+                        await ws.send_json(chat.event("busy"))
                     else:
-                        # own task: closing the page doesn't cancel the agent's turn
-                        task = asyncio.create_task(chat.turn(text))
-                        app.state.tasks.add(task)
-                        task.add_done_callback(app.state.tasks.discard)
-                elif msg.get("type") == "new" and not chat.busy:
-                    await chat.reset()
+                        chat.start(text)
+                elif kind == "cancel" and chat.busy and chat.task:
+                    chat.task.cancel()
+                elif kind == "list":
+                    await ws.send_json(chat.event("conversations", items=chat.history.conversations()))
+                elif kind == "new" and not chat.busy:
+                    await chat.switch(None)
+                elif kind == "open" and not chat.busy:
+                    conv = str(msg.get("conv", ""))
+                    if chat.history.exists(conv):
+                        await chat.switch(conv)
+                    else:
+                        await ws.send_json(chat.event("error", text="That conversation no longer exists."))
+                # anything else: ignored (forward compatible)
         except WebSocketDisconnect:
             pass
         finally:
@@ -199,6 +256,8 @@ def create_app(session) -> Starlette:
     @contextlib.asynccontextmanager
     async def lifespan(app):
         yield
+        if chat.task:
+            chat.task.cancel()
         await session.close()  # don't leave the agent's browser running after Ctrl+C
 
     app = Starlette(
@@ -207,5 +266,5 @@ def create_app(session) -> Starlette:
         middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])],
         lifespan=lifespan,
     )
-    app.state.chat, app.state.tasks = chat, set()
+    app.state.chat = chat
     return app

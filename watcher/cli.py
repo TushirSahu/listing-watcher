@@ -92,10 +92,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.cmd == "web":
+        from watcher.history import DEFAULT_PATH, History
         from watcher.web import create_app
 
         print(f"open http://localhost:{args.port}  (Ctrl+C to stop)")
-        uvicorn.run(create_app(session), host=args.host, port=args.port, log_level="warning")
+        history = History(os.environ.get("HISTORY_DB") or DEFAULT_PATH)
+        uvicorn.run(create_app(session, history), host=args.host, port=args.port, log_level="warning")
         return 0
     print(HELP)
 

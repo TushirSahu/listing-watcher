@@ -204,3 +204,12 @@ async def test_agent_gets_tools_and_streams(monkeypatch):
     report = next(t for t in tools.functions if t.name == "report_listing")
     await report.function(url="https://x.jp/1", title="t", price=1, why_matches="w", verified=True)
     assert got[0].url == "https://x.jp/1"
+
+
+async def test_last_turn_steps_and_cost(monkeypatch):
+    h = History(Reply(answer="a"), steps=17)
+    h.cost_usd = 0.0042
+    install(monkeypatch, [h])
+    s = ChatSession(llm=object())
+    await s.ask("x")
+    assert s.last_steps == 17 and s.last_cost == 0.0042
