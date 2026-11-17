@@ -177,3 +177,9 @@ async def test_step_budget_stops_turns(monkeypatch):
     r = await s.ask("3")
     assert r.answer.startswith("error:") and "budget" in r.answer
     assert made[0].tasks == ["2"]  # third turn never ran
+
+
+def test_rules_compare_sites_and_commute():
+    for s in ["Yahoo Auctions", "Rakuma", "compare", "cheapest site", "transit.yahoo.co.jp", "commute"]:
+        assert s in SYSTEM_RULES, s
+    assert "*.yahoo.co.jp" in DEFAULT_SITES  # transit.yahoo.co.jp is reachable

@@ -329,7 +329,7 @@ function showTags(listings) {
     body.append(why);
     const href = safeUrl(l.url);
     if (href) {
-      const a = el("a", "", "Open listing ↗");
+      const a = el("a", "", `Open on ${new URL(href).hostname.replace(/^(www|jp)\./, "")} ↗`);
       a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer";
       body.append(a);
     }
