@@ -55,7 +55,8 @@ def make_tools(on_listing: Callable[[Listing], int | None] | None = None) -> Too
                        verified=verified, item_key=item_key, image_url=image_url)
         cleaned = clean_listings([item])
         if not cleaned:
-            return "not shown: url must be the listing's own https page"
+            return ("not shown: url must be a full https link to the listing's own page, "
+                    "e.g. https://jp.mercari.com/item/m123 (not /item/m123 or javascript:). Call again with the full link.")
         n = on_listing(cleaned[0]) if on_listing else None
         return f"shown as #{n}" if n else "shown"
 

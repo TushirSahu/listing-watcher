@@ -71,3 +71,10 @@ def test_report_listing_rejects_bad_link():
     out = asyncio.run(_tool(tools, "report_listing").function(
         url="javascript:void(0)", title="x", price=1, why_matches="", verified=True))
     assert out.startswith("not shown") and got == []
+
+
+def test_report_listing_explains_relative_link():
+    got = []
+    out = asyncio.run(_tool(make_tools(got.append), "report_listing").function(
+        url="/item/m123", title="x", price=1, why_matches="", verified=True))
+    assert got == [] and "full https link" in out and "https://jp.mercari.com/item/m123" in out
