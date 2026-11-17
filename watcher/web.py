@@ -172,8 +172,9 @@ class Chat:
         except asyncio.CancelledError:
             await self.session.close()  # agent state is unknown after a cancel; next turn starts fresh
             self.needs_recap = True
-            self._finish("Cancelled.", [], None, None)
-            await self.broadcast(self.event("cancelled"))
+            partial = self.streamed  # cards confirmed before the stop are still real results
+            self._finish("Cancelled.", partial, None, None)
+            await self.broadcast(self.event("cancelled", listings=partial))
             return
         except Exception as e:  # ChatSession shouldn't raise; keep the page usable if it does
             reply = Reply(answer=f"error: {type(e).__name__}: {e}")

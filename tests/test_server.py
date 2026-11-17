@@ -237,3 +237,17 @@ def test_accepts_same_origin_websocket(tmp_path):
     with TestClient(app_for(tmp_path), base_url=BASE) as c:
         with c.websocket_connect(WS, headers={"origin": "http://localhost:8000"}) as ws:
             assert ws.receive_json()["type"] == "history"
+
+
+def test_cancel_keeps_cards_found_so_far(tmp_path):
+    s = FakeSession(stream=[GOOD], hang=True)
+    app = app_for(tmp_path, s)
+    with TestClient(app, base_url=BASE) as c, c.websocket_connect(WS) as ws:
+        ws.receive_json()
+        ws.send_json({"type": "ask", "text": "slow"})
+        conv = until(ws, "listing")[-1]["conv"]
+        ws.send_json({"type": "cancel"})
+        cancelled = until(ws, "cancelled")[-1]
+    assert [l["url"] for l in cancelled["listings"]] == ["https://x.jp/1"]
+    saved = History(tmp_path / "h.db").messages(conv)
+    assert saved[-1]["text"] == "Cancelled." and saved[-1]["listings"][0]["url"] == "https://x.jp/1"

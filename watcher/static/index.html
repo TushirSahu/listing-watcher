@@ -179,6 +179,29 @@
   .suggestions button::after { content: "↵"; font-family: var(--mono); color: var(--faint); }
   .suggestions button:hover { background: var(--hover); }
 
+  .card.provisional { border-style: dashed; opacity: .75; }
+  .card.provisional .num::after { content: " · checking"; color: var(--muted); }
+  .send.stop { background: var(--error); color: #fff; }
+  .msg .meta { font: 11px var(--mono); color: var(--faint); margin-top: 4px; }
+
+  /* saved conversations */
+  .drawer {
+    position: fixed; top: 56px; left: 0; bottom: 0; width: min(340px, 90vw); z-index: 10;
+    background: var(--surface); border-right: 1px solid var(--border);
+    transform: translateX(-100%); transition: transform .2s ease; display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: none; box-shadow: 8px 0 24px -12px rgba(0,0,0,.25); }
+  .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 8px; }
+  .drawer-head h2 { font-size: 13px; font-weight: 500; margin: 0; }
+  .convs { list-style: none; margin: 0; padding: 0 8px 16px; overflow-y: auto; }
+  .convs button {
+    width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .convs button:hover, .convs button.current { background: var(--hover); }
+  .convs .when { font: 11px var(--mono); color: var(--faint); }
+  .convs .empty-note { color: var(--faint); padding: 8px 10px; font-size: 13px; }
+
   @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
   @keyframes pulse { 50% { opacity: .4; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -201,8 +224,13 @@
     <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
     <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
   </button>
+  <button class="ghost" id="hist" type="button" aria-expanded="false" aria-controls="drawer">History</button>
   <button class="ghost" id="new" type="button">New search</button>
 </header>
+<aside class="drawer" id="drawer" aria-label="Saved conversations">
+  <div class="drawer-head"><h2>Saved conversations</h2><button class="ghost" id="drawer-close" type="button">Close</button></div>
+  <ul class="convs" id="convs"></ul>
+</aside>
 <main>
   <section class="chat" aria-label="Conversation">
     <div class="log" id="log" aria-live="polite"></div>
@@ -246,9 +274,14 @@ function el(tag, cls, text) {
 const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//.test(u) ? u : null);
 const yen = (p) => (p == null ? "¥ —" : "¥" + p.toLocaleString("ja-JP"));
 
+const SEND_ICON = $("send").innerHTML;
+const STOP_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>';
 function setBusy(b) {
   busy = b;
-  input.disabled = $("send").disabled = $("new").disabled = b;
+  input.disabled = $("new").disabled = $("hist").disabled = b;
+  $("send").classList.toggle("stop", b);
+  $("send").innerHTML = b ? STOP_ICON : SEND_ICON;
+  $("send").setAttribute("aria-label", b ? "Stop" : "Send");
   $("status").textContent = b ? "working" : "ready";
   $("status").className = "status" + (b ? " busy" : "");
   feed.classList.toggle("live", b);
@@ -256,7 +289,7 @@ function setBusy(b) {
   if (!b) input.focus();
 }
 
-function addMessage(role, text, count) {
+function addMessage(role, text, count, steps, cost) {
   const isError = role === "agent" && text.startsWith("error:");
   const m = el("div", `msg ${role}` + (isError ? " error" : ""));
   if (role === "agent") m.append(el("div", "who", "agent"));
@@ -264,6 +297,7 @@ function addMessage(role, text, count) {
     ? "That didn't work: " + text.slice(6).trim() + "\nTry again in a minute, or send a follow-up."
     : text));
   if (count) m.append(el("div", "count", `${count} result${count > 1 ? "s" : ""} →`));
+  if (steps) m.append(el("div", "meta", `${steps} steps` + (cost != null ? ` · $${cost.toFixed(4)}` : "")));
   log.append(m);
   log.scrollTop = log.scrollHeight;
 }
@@ -302,13 +336,25 @@ function showEmpty() {
   tags.replaceChildren(box);
 }
 
+function startStreaming() {
+  tags.className = "cards";
+  tags.replaceChildren();
+  $("tags-title").textContent = "Results";
+  $("tags-meta").textContent = "appearing as the agent confirms them";
+}
+function addStreamCard(l, n) {
+  if (tags.className !== "cards") startStreaming();
+  tags.append(makeCard(l, n - 1, 0, true));
+}
 function showTags(listings) {
-  if (!listings.length) return;
+  if (!listings.length) { if (tags.className === "cards" && !tags.children.length) showEmpty(); return; }
   $("tags-title").textContent = "Results";
   $("tags-meta").textContent = `${listings.length} · lowest price first`;
   tags.className = "cards";
-  tags.replaceChildren(...listings.map((l, i) => {
-    const card = el("article", "card");
+  tags.replaceChildren(...listings.map((l, i) => makeCard(l, i, listings.length, false)));
+}
+function makeCard(l, i, total, provisional) {
+    const card = el("article", "card" + (provisional ? " provisional" : ""));
     card.style.animationDelay = `${i * 50}ms`;
     const photo = el("div", "photo", "no photo");
     const src = safeUrl(l.image_url);
@@ -322,7 +368,7 @@ function showTags(listings) {
     const body = el("div", "body");
     const row = el("div", "price-row");
     row.append(el("span", "price", yen(l.price)));
-    if (i === 0 && l.price != null && listings.length > 1) row.append(el("span", "lowest", "lowest"));
+    if (!provisional && i === 0 && l.price != null && total > 1) row.append(el("span", "lowest", "lowest"));
     body.append(row, el("h3", "title", l.title));
     const why = el("p", "why", l.why_matches);
     if (!l.verified) why.append(" ", el("span", "unverified", "· not opened"));
@@ -335,7 +381,6 @@ function showTags(listings) {
     }
     card.append(photo, body);
     return card;
-  }));
 }
 
 function connect() {
@@ -346,23 +391,37 @@ function connect() {
     if (m.type === "history") {
       log.replaceChildren(); showEmpty();
       if (!m.messages.length) addMessage("agent", "What are you looking for? I'll search, check the listings, and you can follow up — \"only ones with the case\", \"check #2's photos\".");
+      current = m.conv;
       for (const h of m.messages) {
-        addMessage(h.role, h.text, h.listings.length);
+        addMessage(h.role, h.text, h.listings.length, h.steps, h.cost);
         if (h.listings.length) showTags(h.listings);
       }
       idleFeed("Steps appear here while the agent works.");
       m.steps.forEach(addStep);
       setBusy(m.busy);
     } else if (m.type === "message") {
-      addMessage("you", m.text); idleFeed("Starting…"); setBusy(true);
+      current = m.conv;
+      addMessage("you", m.text); idleFeed("Starting…"); startStreaming(); setBusy(true);
     } else if (m.type === "step") {
       addStep(m.text);
+    } else if (m.type === "listing") {
+      addStreamCard(m.listing, m.n);
     } else if (m.type === "reply") {
-      addMessage("agent", m.text, m.listings.length);
+      addMessage("agent", m.text, m.listings.length, m.steps, m.cost);
       showTags(m.listings); setBusy(false);
+    } else if (m.type === "cancelled") {
+      addMessage("agent", "Cancelled.", m.listings.length);
+      if (m.listings.length) { showTags(m.listings); $("tags-meta").textContent = "stopped early · partial results"; }
+      else showEmpty();
+      setBusy(false);
+    } else if (m.type === "conversations") {
+      renderConversations(m.items);
+    } else if (m.type === "error") {
+      addMessage("agent", m.text);
     } else if (m.type === "busy") {
       $("steps-count").textContent = "still working on the last request";
     } else if (m.type === "reset") {
+      current = null;
       log.replaceChildren(); showEmpty();
       idleFeed("Steps appear here while the agent works.");
       addMessage("agent", "New search. What are you looking for?");
@@ -376,17 +435,42 @@ function connect() {
   };
 }
 
+const send = (msg) => ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(msg));
 $("form").onsubmit = (e) => {
   e.preventDefault();
+  if (busy) { send({ type: "cancel" }); return; }
   const text = input.value.trim();
-  if (!text || busy || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "ask", text }));
   input.value = "";
 };
 input.onkeydown = (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); }
 };
-$("new").onclick = () => ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: "new" }));
+$("new").onclick = () => send({ type: "new" });
+
+let current = null;
+function toggleDrawer(open) {
+  $("drawer").classList.toggle("open", open);
+  $("hist").setAttribute("aria-expanded", String(open));
+  if (open) send({ type: "list" });
+}
+$("hist").onclick = () => toggleDrawer(!$("drawer").classList.contains("open"));
+$("drawer-close").onclick = () => toggleDrawer(false);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleDrawer(false); });
+function renderConversations(items) {
+  const list = $("convs");
+  if (!items.length) { list.replaceChildren(el("li", "empty-note", "No saved conversations yet.")); return; }
+  list.replaceChildren(...items.map((c) => {
+    const li = el("li");
+    const b = el("button", c.conv === current ? "current" : "");
+    b.type = "button";
+    b.append(el("span", "", c.title), el("span", "when", new Date(c.updated).toLocaleString()));
+    b.onclick = () => { send({ type: "open", conv: c.conv }); toggleDrawer(false); };
+    li.append(b);
+    return li;
+  }));
+}
 
 // theme toggle: follows the system until clicked, then remembers the choice
 const systemDark = matchMedia("(prefers-color-scheme: dark)");
