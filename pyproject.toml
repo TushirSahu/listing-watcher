@@ -7,10 +7,16 @@ name = "listing-watcher"
 version = "0.1.0"
 description = "Chat with a browser agent that finds and compares listings (Mercari, SUUMO, ...)"
 requires-python = ">=3.11"
-dependencies = ["browser-use==1.0.5", "python-dotenv", "starlette", "uvicorn", "httpx"]
+dependencies = [
+    "browser-use==1.0.5",
+    "python-dotenv==1.2.4",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+    "httpx==0.28.1",
+]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+dev = ["pytest==9.2.0", "pytest-asyncio==1.5.0"]
 
 [project.scripts]
 listing-watcher = "watcher.cli:main"

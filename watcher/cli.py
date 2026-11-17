@@ -9,7 +9,7 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 
-from watcher.agent import ChatSession, ConfigError, make_llm
+from watcher.agent import DEFAULT_SITES, ChatSession, ConfigError, make_llm
 from watcher.listings import clean_listings
 from watcher.models import Reply
 
@@ -43,13 +43,34 @@ async def chat_loop(session, read: Callable[[], Awaitable[str]], write: Callable
         await session.close()
 
 
-def _setup() -> tuple[object, int | None]:
+def _positive_int(name: str, default: int | None) -> int | None:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    if not (value.isdigit() and int(value) > 0):
+        raise ConfigError(f"{name} must be a positive number (got {value!r})")
+    return int(value)
+
+
+def _allowed_sites() -> list[str] | None:
+    extra = [s.strip() for s in os.environ.get("ALLOWED_SITES", "").split(",") if s.strip()]
+    if "*" in extra:
+        print("warning: ALLOWED_SITES=* lets the agent's browser open any site", file=sys.stderr)
+        return None
+    return DEFAULT_SITES + extra
+
+
+def _session(headless: bool) -> ChatSession:
     load_dotenv(Path.cwd() / ".env")
     llm = make_llm(os.environ.get("LLM_PROVIDER", ""), os.environ.get("LLM_MODEL", ""), os.environ)
-    cap = os.environ.get("LLM_MAX_CONTEXT_CHARS", "").strip()
-    if cap and not (cap.isdigit() and int(cap) > 0):
-        raise ConfigError(f"LLM_MAX_CONTEXT_CHARS must be a positive number (got {cap!r})")
-    return llm, int(cap) if cap else None
+    return ChatSession(
+        llm,
+        headless=headless,
+        max_context_chars=_positive_int("LLM_MAX_CONTEXT_CHARS", None),
+        allowed_sites=_allowed_sites(),
+        injection_check=os.environ.get("INJECTION_CHECK", "on").strip().lower() != "off",
+        step_budget=_positive_int("MAX_STEPS_PER_RUN", 600),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,21 +81,21 @@ def main(argv: list[str] | None = None) -> int:
     web_p = sub.add_parser("web", help="open the chat in your web browser (http://localhost:8000)")
     web_p.add_argument("--show-browser", action="store_true", help="show the agent's browser window")
     web_p.add_argument("--port", type=int, default=8000)
+    web_p.add_argument("--host", default="127.0.0.1", help="bind address (the Docker image uses 0.0.0.0 inside the container)")
     args = parser.parse_args(argv)
     logging.getLogger("browser_use").setLevel(logging.WARNING)  # hide per-step agent logs
 
     try:
-        llm, cap = _setup()
+        session = _session(headless=not args.show_browser)
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
 
-    session = ChatSession(llm, headless=not args.show_browser, max_context_chars=cap)
     if args.cmd == "web":
         from watcher.web import create_app
 
         print(f"open http://localhost:{args.port}  (Ctrl+C to stop)")
-        uvicorn.run(create_app(session), host="127.0.0.1", port=args.port, log_level="warning")
+        uvicorn.run(create_app(session), host=args.host, port=args.port, log_level="warning")
         return 0
     print(HELP)
 

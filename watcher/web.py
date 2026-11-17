@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import ipaddress
 import logging
 import re
 from pathlib import Path
@@ -8,6 +9,8 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import FileResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -58,23 +61,43 @@ def step_text(msg: str) -> str | None:
     return f"step {n} · {what}"
 
 
-async def _image_of(client: httpx.AsyncClient, url: str) -> str | None:
+async def _system_resolve(host: str) -> list[str]:
+    infos = await asyncio.get_running_loop().getaddrinfo(host, 443)
+    return [info[4][0] for info in infos]
+
+
+async def _is_public_https(url: str, resolve) -> bool:
+    """Only fetch https URLs whose host resolves to public internet addresses (no LAN, loopback, metadata IPs)."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        return False
     try:
+        addrs = await resolve(parts.hostname)  # an IP literal resolves to itself
+        return bool(addrs) and all(ipaddress.ip_address(a).is_global for a in addrs)
+    except Exception:
+        return False
+
+
+async def _image_of(client: httpx.AsyncClient, url: str, resolve) -> str | None:
+    try:
+        if not await _is_public_https(url, resolve):
+            return None
         resp = await client.get(url)
         m = _OG_IMAGE.search(resp.text[:300_000])
-        return m[1] if m else None
+        return m[1] if m and m[1].startswith("https://") else None
     except Exception:  # a missing photo is fine; never fail the reply over it
         return None
 
 
-async def fill_images(items: list[dict], transport: httpx.AsyncBaseTransport | None = None) -> None:
-    """Fill missing image_url from each listing page's og:image / twitter:image (models often skip photos)."""
+async def fill_images(items: list[dict], transport: httpx.AsyncBaseTransport | None = None, resolve=None) -> None:
+    """Fill missing image_url from each listing page's og:image / twitter:image (models often skip photos).
+    The URLs come from model output, so only public https pages are fetched and redirects aren't followed."""
     missing = [i for i in items if not i.get("image_url")]
-    if not missing:
-        return
-    async with httpx.AsyncClient(timeout=6, follow_redirects=True, transport=transport,
+    resolve = resolve or _system_resolve
+    # note: DNS is checked before the request, not pinned for it (small rebinding window); fine for a local tool
+    async with httpx.AsyncClient(timeout=6, follow_redirects=False, transport=transport,
                                  headers={"User-Agent": "Mozilla/5.0"}) as client:
-        found = await asyncio.gather(*(_image_of(client, i["url"]) for i in missing))
+        found = await asyncio.gather(*(_image_of(client, i["url"], resolve) for i in missing))
     for item, image in zip(missing, found):
         item["image_url"] = image
 
@@ -147,6 +170,11 @@ def create_app(session) -> Starlette:
         return FileResponse(INDEX)
 
     async def ws_endpoint(ws: WebSocket):
+        # browsers always send Origin; refuse pages from other sites (cross-site WebSocket hijacking)
+        origin, host = ws.headers.get("origin"), ws.headers.get("host")
+        if origin and origin not in (f"http://{host}", f"https://{host}"):
+            await ws.close(code=1008)
+            return
         await ws.accept()
         chat.sockets.add(ws)
         await ws.send_json({"type": "history", "messages": chat.messages, "busy": chat.busy, "steps": chat.steps})
@@ -173,6 +201,11 @@ def create_app(session) -> Starlette:
         yield
         await session.close()  # don't leave the agent's browser running after Ctrl+C
 
-    app = Starlette(routes=[Route("/", index), WebSocketRoute("/ws", ws_endpoint)], lifespan=lifespan)
+    app = Starlette(
+        routes=[Route("/", index), WebSocketRoute("/ws", ws_endpoint)],
+        # only answer requests addressed to this machine by name (blocks DNS-rebinding pages)
+        middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])],
+        lifespan=lifespan,
+    )
     app.state.chat, app.state.tasks = chat, set()
     return app
