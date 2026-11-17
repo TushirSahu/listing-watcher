@@ -1,13 +1,23 @@
 # listing-watcher
 
-A browser agent that watches shopping and listing sites for you. Describe what you want in plain words. On a schedule an AI opens a real browser, searches the site, opens the most promising listings to check condition and details, and pings you on Telegram when something new matches or a price drops.
+Chat with a browser agent that shops for you. Ask for something in plain words. The agent opens a real browser, searches sites like Mercari or SUUMO, opens the promising listings to check condition and details, and answers with a short list. Follow up to refine, compare, or dig into one listing. It keeps the same browser and remembers the results.
 
-Built on [browser-use](https://github.com/browser-use/browser-use). Bring your own model: Anthropic, OpenAI, Google, or a local Ollama model.
+Built on [browser-use](https://github.com/browser-use/browser-use). Bring your own model: Google Gemini (free tier works), Anthropic, OpenAI, or a local Ollama model.
 
 ```
-[headphones] new: Sony WH-1000XM5 美品 ケース付き - ¥23,500
-good condition per description, case included, under budget
-https://jp.mercari.com/item/m12345678901
+you> used Sony WH-1000XM5 under ¥25,000, good condition, with case, on Mercari
+agent> Found 3 good options, cheapest first.
+  1. ¥19,666  ソニー WH-1000XM5 ケース付
+     Case included, light wear, under budget
+     https://jp.mercari.com/item/m85308644311
+  2. ¥19,999  【美品】ソニー WH-1000XM5 プラチナシルバー
+     Excellent condition per description, case included
+     https://jp.mercari.com/item/m88650713138
+
+you> check #2's description more closely
+agent> #2: seller says used ~10 times, no scratches, original box and cable included...
+
+you> /new
 ```
 
 ## Setup
@@ -15,68 +25,43 @@ https://jp.mercari.com/item/m12345678901
 Requires Python 3.11+.
 
 ```bash
-git clone <this repo> && cd listing-watcher
+git clone https://github.com/TushirSahu/listing-watcher && cd listing-watcher
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-# The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile
-# (never your logged-in sessions). No Chrome installed? Get Chromium:
-#   pip install playwright && playwright install chromium
-
-cp .env.example .env                # choose a provider, paste your API key
-cp watches.example.yaml watches.yaml  # describe what to watch
+cp .env.example .env      # choose a provider, paste your API key
 ```
 
-### Telegram alerts (optional)
-
-1. In Telegram, message **@BotFather** with `/newbot` and copy the token into `TELEGRAM_BOT_TOKEN`.
-2. Send any message to your new bot.
-3. Open `https://api.telegram.org/bot<token>/getUpdates` and copy `"chat":{"id": ...}` into `TELEGRAM_CHAT_ID`.
-
-If you skip this, alerts print to the console.
+The agent uses your installed Chrome/Chromium/Edge with a fresh, empty profile (never your logged-in sessions). No Chrome installed? `pip install playwright && playwright install chromium`.
 
 ## Use
 
 ```bash
-listing-watcher check headphones --show-browser   # test one watch: watch the browser, print what it found
-listing-watcher run                               # keep running; check each watch on its schedule
+listing-watcher chat                  # browser runs hidden
+listing-watcher chat --show-browser   # watch the agent work
 ```
 
-`check` never sends alerts and never touches the agent's memory, so you can tune a watch freely.
+- Ask for anything listed on a site: used items, new items, rentals. Name a site ("on Mercari") or let the agent pick (Mercari / Yahoo Auctions / Rakuma for used goods, Amazon.co.jp for new, SUUMO for rentals).
+- Follow up in plain words: "only ones with the case", "check #2's photos", "now try Rakuma", "which is the best deal?".
+- `/new` starts a fresh search (new browser, no memory). `/quit` or Ctrl+D exits.
 
-On the first `run` of a new watch, current matches are recorded quietly and you get **one** summary message. After that you get one message per new match or price drop. If a check fails (captcha, site changed, agent got lost) you get one alert, then one "working again" when it recovers, with no repeat alerts in between.
+How results are kept honest:
 
-## Watch fields (`watches.yaml`)
-
-| field | required | default | meaning |
-|---|---|---|---|
-| `name` | yes | | short id, used in alerts and `check` |
-| `site` | yes | | start URL, e.g. `https://jp.mercari.com` |
-| `want` | yes | | plain-language request, including fuzzy criteria ("good condition, with case") |
-| `max_price` | no | none | yen; listings above it are never alerted |
-| `every` | no | `2h` | `30m` / `2h` / `1d`; minimum `15m` |
-| `max_results` | no | `10` | search results the agent reads per check |
-| `open_listings` | no | `5` | top candidates the agent opens to verify details; `0` = search page only (alerts marked *unverified*) |
-
-## Apartment hunting
-
-`watches.example.yaml` includes a SUUMO watch (`apartment`): 1K/1LDK rentals in Suita, Osaka, near a station, foreigner-friendly, up to ¥70,000/month. Change the `want` text to your area and needs and set `max_price` to your budget. Try it with `listing-watcher check apartment`.
-
-How it handles rentals (and any other site):
-
-- **Price is the real monthly cost:** rent + management fee (管理費/共益費). One-time costs (deposit, key money, agency fee) are listed in the alert text instead. For shop items, price includes shipping when it's charged.
-- **The same flat from several agencies alerts once.** The agent reports a short identity for each item (building, floor, layout, size), and repeats are recognized even under different links. If another agency lists the same flat for less, you get a price-drop alert.
+- **Price is what you actually pay:** item plus shipping, or rent plus management fee (管理費/共益費). One-time costs (deposit, key money) are mentioned in the text instead.
+- **Sold or reserved listings are skipped.** Duplicates are merged, including the same flat listed by several agencies, keeping the cheapest.
+- **Requirements a listing doesn't mention** (e.g. "foreigner-friendly") are flagged as unconfirmed instead of silently dropped.
+- **Read-only:** it never logs in, buys, or messages anyone.
 
 ## Models and cost
 
-Each check is one agent run of up to `15 + 4 × open_listings` browser steps, each an LLM call. A small, fast model (Haiku / mini / Flash class) is enough. Lower `open_listings` or raise `every` to spend less.
+Every agent step is one model call, and a request usually takes 10–40 steps. A small, fast model is enough.
 
-**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google`, `LLM_MODEL=gemini-flash-lite-latest`. The free tier allows only a few requests per minute per model (5/min on `gemini-2.5-flash` at time of writing), and the agent makes one request per browser step, so non-lite models often fail with `429 quota exceeded`. Lite models work, and a check takes a few minutes. Big pages (SUUMO) can also hit the tokens-per-minute limit: set `LLM_MAX_CONTEXT_CHARS=60000` in `.env`.
+**Free option: Google Gemini.** Get a key at aistudio.google.com, then set `LLM_PROVIDER=google` and `LLM_MODEL=gemini-flash-lite-latest` (or another lite model). The free tier has per-minute limits on requests and tokens. The agent retries rate-limit errors automatically, so a turn may pause for a bit. Big pages (SUUMO) can hit the token limit; set `LLM_MAX_CONTEXT_CHARS=60000` in `.env`. Free lite models are sometimes careless with titles; a paid model (Gemini Flash, Claude Haiku, GPT mini) gives more consistent results.
 
-**Ollama is best-effort.** Small local models often get lost on real sites. Use a capable model and expect failures.
+**Ollama is best-effort.** Small local models often get lost on real sites.
 
 ## Be a good citizen
 
-This tool is for personal use. It is read-only: it never logs in, buys, or messages anyone. Keep intervals reasonable (minimum 15 minutes is enforced), and you are responsible for following each site's terms.
+This tool is for personal use. You are responsible for following each site's terms.
 
 ## Development
 

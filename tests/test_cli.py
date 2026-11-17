@@ -1,42 +1,89 @@
-from datetime import datetime, timedelta
-
 import watcher.cli as cli
-from watcher.cli import due, main, run_due
-from watcher.config import Watch
-from watcher.models import RunResult
-from watcher.store import Store
-
-NOW = datetime(2026, 11, 16, 12, 0)
-GOOD_YAML = "watches:\n  - {name: a, site: https://x.jp, want: thing}\n"
+from watcher.cli import chat_loop, main, render
+from watcher.models import Listing, Reply
 
 
-def W(name):
-    return Watch(name=name, site="s", want="w", max_price=None, every=timedelta(hours=2))
+def L(n, price, title):
+    return Listing(url=f"https://x.jp/{n}", title=title, price=price, why_matches=f"why {n}", matches=True, verified=True)
 
 
-def test_due():
-    s = Store(":memory:")
-    a = W("a")
-    assert due([a], s, NOW) == [a]
-    s.set_last_run("a", NOW - timedelta(hours=1))
-    assert due([a], s, NOW) == []
-    s.set_last_run("a", NOW - timedelta(hours=2))
-    assert due([a], s, NOW) == [a]
+def test_render_numbered():
+    r = Reply(answer="Found 2.", listings=[L(1, 19666, "WH-1000XM5"), L(2, None, "XM5 case")])
+    assert render(r) == (
+        "Found 2.\n"
+        "  1. ¥19,666  WH-1000XM5\n"
+        "     why 1\n"
+        "     https://x.jp/1\n"
+        "  2. ¥?  XM5 case\n"
+        "     why 2\n"
+        "     https://x.jp/2"
+    )
 
 
-async def test_run_due_failed_send_retries_listing(monkeypatch):
-    from watcher.models import Listing
+def test_render_cleans_listings():
+    bad = Listing(url="javascript:void(0)", title="x", price=1, why_matches="", matches=True, verified=True)
+    assert render(Reply(answer="hi", listings=[bad])) == "hi"
 
-    item = Listing(url="https://x.jp/1", title="Sony", price=1, why_matches="fits", matches=True, verified=True)
 
-    async def fake_run(watch, llm, headless=True, max_context_chars=None):
-        return RunResult(searched=True, listings_seen=1, blocked_or_lost=False, note="", listings=[item])
+class FakeSession:
+    def __init__(self):
+        self.asked, self.closed = [], 0
 
-    monkeypatch.setattr(cli, "run_watch", fake_run)
-    s = Store(":memory:")
-    s.set_status("a", "ok")  # past first run
-    await run_due([W("a")], s, object(), NOW, True, lambda t: False)
-    assert not s.seen("a", "https://x.jp/1")
+    async def ask(self, text):
+        self.asked.append(text)
+        return Reply(answer=f"ok {text}")
+
+    async def close(self):
+        self.closed += 1
+
+
+def reader(*lines, end=EOFError):
+    it = iter(lines)
+
+    async def read():
+        try:
+            return next(it)
+        except StopIteration:
+            raise end()
+    return read
+
+
+async def run(*lines, end=EOFError):
+    s, out = FakeSession(), []
+    await chat_loop(s, reader(*lines, end=end), out.append)
+    return s, out
+
+
+async def test_loop_asks_and_prints():
+    s, out = await run("find xm5", "only with case")
+    assert s.asked == ["find xm5", "only with case"]
+    assert "ok find xm5" in out and "ok only with case" in out
+
+
+async def test_blank_ignored():
+    s, _ = await run("", "   ", "x")
+    assert s.asked == ["x"]
+
+
+async def test_new_resets():
+    s, out = await run("a", "/new", "b")
+    assert s.asked == ["a", "b"] and s.closed >= 2  # /new closes, exit closes
+    assert any("new search" in o for o in out)
+
+
+async def test_quit_closes():
+    s, _ = await run("a", "/quit", "never")
+    assert s.asked == ["a"] and s.closed == 1
+
+
+async def test_eof_closes():
+    s, _ = await run("a")
+    assert s.closed == 1
+
+
+async def test_ctrl_c_closes():
+    s, _ = await run("a", end=KeyboardInterrupt)
+    assert s.closed == 1
 
 
 def _env(monkeypatch, tmp_path, **env):
@@ -47,62 +94,28 @@ def _env(monkeypatch, tmp_path, **env):
         monkeypatch.setenv(k, v)
 
 
-def test_main_bad_config_exit_2(monkeypatch, tmp_path, capsys):
-    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
-    (tmp_path / "w.yaml").write_text("watches:\n  - {name: a, site: s}\n")
-    assert main(["run", "--config", str(tmp_path / "w.yaml")]) == 2
-    assert "config error" in capsys.readouterr().err
-
-
 def test_main_missing_key_exit_2(monkeypatch, tmp_path, capsys):
     _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m")
-    (tmp_path / "w.yaml").write_text(GOOD_YAML)
-    assert main(["run", "--config", str(tmp_path / "w.yaml")]) == 2
+    assert main(["chat"]) == 2
     err = capsys.readouterr().err
     assert "config error" in err and "ANTHROPIC_API_KEY" in err
-
-
-def test_check_unknown_name(monkeypatch, tmp_path, capsys):
-    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
-    (tmp_path / "w.yaml").write_text(GOOD_YAML)
-    assert main(["check", "nope", "--config", str(tmp_path / "w.yaml")]) == 2
-    assert "nope" in capsys.readouterr().err
-
-
-def test_check_prints_and_does_not_store(monkeypatch, tmp_path, capsys):
-    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
-    (tmp_path / "w.yaml").write_text(GOOD_YAML)
-
-    async def fake_run(watch, llm, headless=True, max_context_chars=None):
-        return RunResult.model_validate({"searched": True, "listings_seen": 1, "blocked_or_lost": False, "note": "",
-                                         "listings": [{"url": "https://x.jp/1", "title": "Sony", "price": 100,
-                                                       "why_matches": "fits", "matches": True, "verified": True, "item_key": "Maison A 3F"}]})
-
-    monkeypatch.setattr(cli, "run_watch", fake_run)
-    assert main(["check", "a", "--config", str(tmp_path / "w.yaml")]) == 0
-    out = capsys.readouterr().out
-    assert "Sony" in out and "https://x.jp/1" in out and "Maison A 3F" in out
-    assert not list(tmp_path.glob("*.db"))
-
-
-def test_check_passes_context_cap(monkeypatch, tmp_path):
-    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k",
-         LLM_MAX_CONTEXT_CHARS="60000")
-    (tmp_path / "w.yaml").write_text(GOOD_YAML)
-    seen = {}
-
-    async def fake_run(watch, llm, headless=True, max_context_chars=None):
-        seen["cap"] = max_context_chars
-        return RunResult(searched=True, listings_seen=0, blocked_or_lost=False, note="", listings=[])
-
-    monkeypatch.setattr(cli, "run_watch", fake_run)
-    assert main(["check", "a", "--config", str(tmp_path / "w.yaml")]) == 0
-    assert seen["cap"] == 60000
 
 
 def test_bad_context_cap_exit_2(monkeypatch, tmp_path, capsys):
     _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k",
          LLM_MAX_CONTEXT_CHARS="lots")
-    (tmp_path / "w.yaml").write_text(GOOD_YAML)
-    assert main(["check", "a", "--config", str(tmp_path / "w.yaml")]) == 2
+    assert main(["chat"]) == 2
     assert "LLM_MAX_CONTEXT_CHARS" in capsys.readouterr().err
+
+
+def test_main_runs_loop_with_cap(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k",
+         LLM_MAX_CONTEXT_CHARS="60000")
+    seen = {}
+
+    async def fake_loop(session, read, write):
+        seen["cap"], seen["headless"] = session.max_context_chars, session.headless
+
+    monkeypatch.setattr(cli, "chat_loop", fake_loop)
+    assert main(["chat", "--show-browser"]) == 0
+    assert seen == {"cap": 60000, "headless": False}

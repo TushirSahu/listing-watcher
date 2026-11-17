@@ -3,97 +3,76 @@ import asyncio
 import logging
 import os
 import sys
-from collections.abc import Callable
-from datetime import datetime
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from watcher.agent import make_llm, run_watch
-from watcher.config import ConfigError, Watch, load_watches
-from watcher.decide import process
-from watcher.notify import send_message
-from watcher.store import Store
+from watcher.agent import ChatSession, ConfigError, make_llm
+from watcher.listings import clean_listings
+from watcher.models import Reply
 
-TICK_SECONDS = 60
+HELP = "Ask for something to find. Follow up to refine. /new starts a new search, /quit exits."
 
 
-def due(watches: list[Watch], store: Store, now: datetime) -> list[Watch]:
-    out = []
-    for w in watches:
-        last = store.last_run(w.name)
-        if last is None or now - last >= w.every:
-            out.append(w)
-    return out
+def render(reply: Reply) -> str:
+    lines = [reply.answer]
+    for n, item in enumerate(clean_listings(reply.listings), 1):
+        price = "?" if item.price is None else f"{item.price:,}"
+        lines += [f"  {n}. ¥{price}  {item.title}", f"     {item.why_matches}", f"     {item.url}"]
+    return "\n".join(lines)
 
 
-async def run_due(watches: list[Watch], store: Store, llm: object, now: datetime, headless: bool,
-                  send: Callable[[str], bool], max_context_chars: int | None = None) -> None:
-    for w in due(watches, store, now):
-        result = await run_watch(w, llm, headless=headless, max_context_chars=max_context_chars)
-        process(w, result, store, send=send)
-        store.set_last_run(w.name, now)
+async def chat_loop(session, read: Callable[[], Awaitable[str]], write: Callable[[str], None]) -> None:
+    try:
+        while True:
+            text = (await read()).strip()
+            if not text:
+                continue
+            if text == "/quit":
+                break
+            if text == "/new":
+                await session.close()
+                write("started a new search")
+                continue
+            write(render(await session.ask(text)))
+    except (EOFError, KeyboardInterrupt):
+        pass
+    finally:
+        await session.close()
 
 
-def _setup(config: str) -> tuple[list[Watch], object, int | None]:
+def _setup() -> tuple[object, int | None]:
     load_dotenv(Path.cwd() / ".env")
-    watches = load_watches(Path(config))
     llm = make_llm(os.environ.get("LLM_PROVIDER", ""), os.environ.get("LLM_MODEL", ""), os.environ)
     cap = os.environ.get("LLM_MAX_CONTEXT_CHARS", "").strip()
     if cap and not (cap.isdigit() and int(cap) > 0):
         raise ConfigError(f"LLM_MAX_CONTEXT_CHARS must be a positive number (got {cap!r})")
-    return watches, llm, int(cap) if cap else None
-
-
-def _print_result(result) -> None:
-    print(f"searched={result.searched} listings_seen={result.listings_seen} "
-          f"blocked_or_lost={result.blocked_or_lost} note={result.note!r}")
-    for item in result.listings:
-        price = "?" if item.price is None else f"¥{item.price:,}"
-        print(f"- [{'MATCH' if item.matches else 'no'}{'' if item.verified else ', unverified'}] "
-              f"{item.title} - {price}\n  {item.why_matches}\n  id: {item.item_key or '-'}\n  {item.url}")
-
-
-async def _loop(watches, store, llm, headless, cap) -> None:
-    token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
-    send = lambda text: send_message(text, token, chat_id)
-    names = ", ".join(w.name for w in watches)
-    print(f"watching {len(watches)} watch(es): {names}. Ctrl+C to stop.")
-    while True:
-        await run_due(watches, store, llm, datetime.now(), headless, send, max_context_chars=cap)
-        await asyncio.sleep(TICK_SECONDS)
+    return llm, int(cap) if cap else None
 
 
 def main(argv: list[str] | None = None) -> int:
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--config", default="watches.yaml", help="watch list file (default: watches.yaml)")
-    common.add_argument("--show-browser", action="store_true", help="show the browser window")
-    parser = argparse.ArgumentParser(prog="listing-watcher", description="Browser agent that watches listing sites.")
+    parser = argparse.ArgumentParser(prog="listing-watcher", description="Chat with a browser agent that finds listings.")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    run_p = sub.add_parser("run", parents=[common], help="check all watches on their schedule, send alerts")
-    run_p.add_argument("--db", default="state.db", help="memory file (default: state.db)")
-    check_p = sub.add_parser("check", parents=[common], help="test one watch once; prints only, no alerts or memory")
-    check_p.add_argument("name")
+    chat_p = sub.add_parser("chat", help="start a conversation")
+    chat_p.add_argument("--show-browser", action="store_true", help="show the browser window")
     args = parser.parse_args(argv)
     logging.getLogger("browser_use").setLevel(logging.WARNING)  # hide per-step agent logs
 
     try:
-        watches, llm, cap = _setup(args.config)
+        llm, cap = _setup()
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
-    headless = not args.show_browser
 
-    if args.cmd == "check":
-        watch = next((w for w in watches if w.name == args.name), None)
-        if watch is None:
-            print(f"config error: no watch named {args.name!r}", file=sys.stderr)
-            return 2
-        _print_result(asyncio.run(run_watch(watch, llm, headless=headless, max_context_chars=cap)))
-        return 0
+    session = ChatSession(llm, headless=not args.show_browser, max_context_chars=cap)
+    print(HELP)
+
+    async def read() -> str:
+        return await asyncio.to_thread(input, "\nyou> ")
 
     try:
-        asyncio.run(_loop(watches, Store(args.db), llm, headless, cap))
+        asyncio.run(chat_loop(session, read, lambda text: print(f"agent> {text}")))
     except KeyboardInterrupt:
-        print("stopped")
+        pass
     return 0

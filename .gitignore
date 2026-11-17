@@ -1,8 +1,9 @@
 .venv/
 .env
-*.db
-watches.yaml
 __pycache__/
 *.egg-info/
 .pytest_cache/
 docs/
+.DS_Store
+watches.yaml
+*.db
