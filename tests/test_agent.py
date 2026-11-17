@@ -180,13 +180,27 @@ async def test_step_budget_stops_turns(monkeypatch):
 
 
 def test_rules_compare_sites_and_commute():
-    for s in ["Yahoo Auctions", "Rakuma", "compare", "cheapest site", "transit.yahoo.co.jp", "commute"]:
+    for s in ["Yahoo Auctions", "Rakuma", "compare", "cheapest site", "commute_time", "commute"]:
         assert s in SYSTEM_RULES, s
     assert "*.yahoo.co.jp" in DEFAULT_SITES  # transit.yahoo.co.jp is reachable
 
 
 def test_rules_give_direct_search_urls():
     for u in ["https://jp.mercari.com/search?keyword=", "https://auctions.yahoo.co.jp/search/search?p=",
-              "https://paypayfleamarket.yahoo.co.jp/search/", "https://fril.jp/s?query=",
-              "https://transit.yahoo.co.jp/search/result?from="]:
+              "https://paypayfleamarket.yahoo.co.jp/search/", "https://fril.jp/s?query="]:
         assert u in SYSTEM_RULES, u
+
+
+def test_rules_use_report_listing():
+    assert "report_listing" in SYSTEM_RULES
+
+
+async def test_agent_gets_tools_and_streams(monkeypatch):
+    made, _ = install(monkeypatch, [OK])
+    got = []
+    await ChatSession(llm=object(), on_listing=got.append).ask("x")
+    tools = made[0].kwargs["tools"]
+    assert {t.name for t in tools.functions} == {"commute_time", "report_listing"}
+    report = next(t for t in tools.functions if t.name == "report_listing")
+    await report.function(url="https://x.jp/1", title="t", price=1, why_matches="w", verified=True)
+    assert got[0].url == "https://x.jp/1"
