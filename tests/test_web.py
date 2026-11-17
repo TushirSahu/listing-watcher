@@ -120,3 +120,10 @@ def test_steps_forwarded():
         ws.send_json({"type": "ask", "text": "a"})
         msgs = until(ws, "reply")
         assert {"type": "step", "text": "step 2 · opening jp.mercari.com/search"} in msgs
+
+
+def test_shutdown_closes_browser():
+    s = FakeSession()
+    with TestClient(create_app(s)):
+        pass
+    assert s.closed == 1

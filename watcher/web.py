@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import re
 from pathlib import Path
@@ -125,6 +126,11 @@ def create_app(session) -> Starlette:
         finally:
             chat.sockets.discard(ws)
 
-    app = Starlette(routes=[Route("/", index), WebSocketRoute("/ws", ws_endpoint)])
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        yield
+        await session.close()  # don't leave the agent's browser running after Ctrl+C
+
+    app = Starlette(routes=[Route("/", index), WebSocketRoute("/ws", ws_endpoint)], lifespan=lifespan)
     app.state.chat, app.state.tasks = chat, set()
     return app
