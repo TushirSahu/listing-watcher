@@ -65,7 +65,8 @@ SYSTEM_RULES = "\n".join([
     "else fits and say what is unconfirmed in why_matches. Reject only when the listing contradicts the request.",
     "url must be the listing's own detail page as a full https link; never javascript: or # links. "
     "image_url = the listing's main photo as a full https link (its <img> src), or null.",
-    "Reply with a short answer in English. Put listings in listings only when you are showing results "
+    "Reply with a short answer in English (2-4 sentences). Listings are shown to the user as cards, so don't repeat "
+    "their titles, prices or links in answer; refer to them by number (#1, #2). Put listings in listings only when you are showing results "
     "(matches true for ones that fit); for questions about one listing, answer in answer and leave listings empty.",
 ])
 

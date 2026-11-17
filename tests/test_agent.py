@@ -124,3 +124,7 @@ async def test_close_kills_browser_once_and_resets(monkeypatch):
     assert browsers[0].kills == 1
     await s.ask("fresh")
     assert len(made) == 2 and made[1].kwargs["task"] == "fresh"
+
+
+def test_rules_keep_answer_short():
+    assert "don't repeat" in SYSTEM_RULES and "cards" in SYSTEM_RULES
