@@ -81,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     web_p = sub.add_parser("web", help="open the chat in your web browser (http://localhost:8000)")
     web_p.add_argument("--show-browser", action="store_true", help="show the agent's browser window")
     web_p.add_argument("--port", type=int, default=8000)
+    web_p.add_argument("--host", default="127.0.0.1", help="bind address (the Docker image uses 0.0.0.0 inside the container)")
     args = parser.parse_args(argv)
     logging.getLogger("browser_use").setLevel(logging.WARNING)  # hide per-step agent logs
 
@@ -94,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         from watcher.web import create_app
 
         print(f"open http://localhost:{args.port}  (Ctrl+C to stop)")
-        uvicorn.run(create_app(session), host="127.0.0.1", port=args.port, log_level="warning")
+        uvicorn.run(create_app(session), host=args.host, port=args.port, log_level="warning")
         return 0
     print(HELP)
 

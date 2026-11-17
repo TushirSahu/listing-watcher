@@ -165,3 +165,11 @@ def test_bad_step_budget_exit_2(monkeypatch, tmp_path, capsys):
     _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k", MAX_STEPS_PER_RUN="lots")
     assert main(["chat"]) == 2
     assert "MAX_STEPS_PER_RUN" in capsys.readouterr().err
+
+
+def test_web_host_flag(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k")
+    seen = {}
+    monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(host=host))
+    assert main(["web", "--host", "0.0.0.0"]) == 0
+    assert seen["host"] == "0.0.0.0"

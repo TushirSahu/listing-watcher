@@ -1,0 +1,16 @@
+services:
+  agent:
+    build: .
+    env_file: .env               # your API key; nothing else from your machine goes in
+    ports:
+      - "127.0.0.1:8000:8000"    # reachable only from this computer
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/app
+    shm_size: 1gb                # Chromium needs shared memory
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 512
