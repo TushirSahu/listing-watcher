@@ -4,7 +4,9 @@ Chat with a browser agent that shops for you. Ask for something in plain words. 
 
 Built on [browser-use](https://github.com/browser-use/browser-use). Bring your own model: Google Gemini (free tier works), Anthropic, OpenAI, or a local Ollama model.
 
-![Web chat: conversation on the left, result cards on the right](assets/web-results.png)
+![Demo: asking for headphones, live activity and result cards, then a follow-up](assets/demo.gif)
+
+<sub>UI demo with recorded results: the listings come from a real Mercari run and the agent's steps are replayed at speed. Seller photos are blurred. A real search takes 1–5 minutes.</sub>
 
 ## Setup
 
@@ -36,8 +38,6 @@ Chat on the left. On the right, Activity shows each step as the agent works (its
 - **Commute times** for rentals come from a built-in lookup on Yahoo!乗換案内: say where you commute to.
 
 **New search** starts over. The sun/moon button switches light and dark (it follows your system setting until you pick one). The page only listens on your own machine.
-
-![Activity: the agent thinking out loud while it searches](assets/web-working.png)
 
 ### In the terminal
 
