@@ -65,6 +65,20 @@ PlanFn = Callable[[str], Awaitable[Plan]]
 SearchFn = Callable[[str, Plan, Callable[[Listing], object]], Awaitable[list[Listing]]]
 CommuteFn = Callable[[str, str], Awaitable[str]]
 
+_CHAIN_PREFIX = re.compile(
+    r"^(ハードオフ|オフハウス|ホビーオフ|ガレージオフ|モードオフ|ブックオフ|BOOKOFF|トレジャーファクトリー|トレファク|"
+    r"セカンドストリート|2nd STREET)(工具館|スーパーバザー)?\s*"
+)
+
+
+def branch_place(branch: str | None) -> str | None:
+    """'ハードオフ白岡店' -> '白岡': branch names usually carry the place, which is usually a station name."""
+    if not branch:
+        return None
+    place = _CHAIN_PREFIX.sub("", branch.strip()).removesuffix("店").strip()
+    return place or None
+
+
 _GRADES = {g: i for i, g in enumerate(["N", "S", "A", "B", "C", "D", "J"])}
 _MIN = re.compile(r"(\d+) min")
 
@@ -74,12 +88,13 @@ async def rank(plan: Plan, items: list[Listing], commute: CommuteFn | None) -> l
     by_price = sorted(items, key=lambda i: (i.price is None, i.price or 0, _GRADES.get((i.condition_grade or "?")[0], 9)))
     if plan.mode != "pickup" or not plan.home_station or commute is None:
         return by_price
-    stations = sorted({i.branch_station for i in items if i.branch_station})
+    where = lambda i: i.branch_station or branch_place(i.branch)  # note: name-based guess when no station given
+    stations = sorted({where(i) for i in items if where(i)})
     found = await asyncio.gather(*(commute(plan.home_station, s) for s in stations))
     minutes = {s: int(m[1]) for s, t in zip(stations, found) if (m := _MIN.search(t))}
-    ranked = sorted(by_price, key=lambda i: minutes.get(i.branch_station, 10**6))  # stable: keeps price order
-    return [i.model_copy(update={"why_matches": f"{i.why_matches} · {minutes[i.branch_station]} min from "
-                                                f"{plan.home_station}"}) if i.branch_station in minutes else i
+    ranked = sorted(by_price, key=lambda i: minutes.get(where(i), 10**6))  # stable: keeps price order
+    return [i.model_copy(update={"why_matches": f"{i.why_matches} · {minutes[where(i)]} min from "
+                                                f"{plan.home_station}"}) if where(i) in minutes else i
             for i in ranked]
 
 
@@ -136,9 +151,14 @@ async def run_shop_search(request: str, plan_fn: PlanFn, search_fn: SearchFn, co
         return None
     results, failed = state.get("results", []), state.get("failed", [])
     searched = len([c for c in plan.chains if c in CHAINS])
-    order = (f"sorted by train time from {plan.home_station}" if plan.mode == "pickup" and plan.home_station
-             else "sorted by price, then condition")
+    timed = any(" min from " in i.why_matches for i in results)
+    if plan.mode == "pickup" and plan.home_station and timed:
+        order = f"sorted by train time from {plan.home_station}"
+    else:
+        order = "sorted by price, then condition"
     answer = f"Searched {searched} shops and found {len(results)} matches, {order}."
+    if plan.mode == "pickup" and plan.home_station and results and not timed:
+        answer += f" I couldn't find train times from {plan.home_station} to these branches."
     if failed:
         answer += f" I couldn't search {', '.join(failed)} this time."
     return Reply(answer=answer, listings=results)

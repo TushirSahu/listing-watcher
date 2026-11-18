@@ -39,6 +39,20 @@ Chat on the left. On the right, Activity shows each step as the agent works (its
 
 **New search** starts over. The sun/moon button switches light and dark (it follows your system setting until you pick one). The page only listens on your own machine.
 
+### Second-hand shop chains (multi-agent)
+
+Ask for something from second-hand shops, e.g. *"Nintendo Switch under ¥25,000 from second-hand shops. I'll pick it up, I'm near 吹田 station."* The web page then runs a small [LangGraph](https://github.com/langchain-ai/langgraph) workflow:
+
+```
+plan ──► search each chain in parallel ──► merge ──► rank ──► answer
+```
+
+- **plan:** one model call works out the item, budget, and whether you want it **shipped** or will **pick it up** (and from which station).
+- **search:** one browser agent per chain — Hard Off (オフモール), BOOKOFF, Treasure Factory (トレファク), 2nd STREET (best-effort; it blocks bots) — up to 3 at a time. Cards show the shop, branch and condition grade as they are found.
+- **rank:** shipped → price, then condition grade. Pick-up → train time from your station to each branch (Yahoo!乗換案内), then price.
+
+Follow-up questions go to the normal single agent. Requests that name Mercari, Yahoo Auctions, Rakuma, Amazon or SUUMO skip the shop workflow.
+
 ### In the terminal
 
 ```

@@ -160,3 +160,38 @@ def test_make_shop_search_error_turn_counts_as_failed(monkeypatch):
 def test_marketplace_request_returns_none(monkeypatch):
     search = shops_mod.make_shop_search(FakeLLM({"target": "marketplaces", "keywords": "x"}), {})
     assert asyncio.run(search("xm5 on mercari", lambda i: None)) is None
+
+
+def test_branch_place_from_branch_name():
+    from watcher.shops import branch_place
+    assert branch_place("ハードオフ白岡店") == "白岡"
+    assert branch_place("ホビーオフ足立南花畑店") == "足立南花畑"
+    assert branch_place("BOOKOFF 江坂店") == "江坂"
+    assert branch_place(None) is None
+
+
+def test_rank_pickup_uses_branch_name_when_station_missing():
+    plan = Plan(keywords="x", mode="pickup", home_station="吹田")
+
+    async def commute(a, b):
+        return {"江坂": "8 min, direct, ¥190"}.get(b, "no route found")
+
+    items = [L("https://a.jp/far", 1000), L("https://a.jp/near", 9000)]
+    items[0] = items[0].model_copy(update={"branch": "ハードオフ札幌北都店"})
+    items[1] = items[1].model_copy(update={"branch": "ハードオフ江坂店"})
+    out = asyncio.run(rank(plan, items, commute=commute))
+    assert out[0].url == "https://a.jp/near" and "8 min from 吹田" in out[0].why_matches
+
+
+def test_answer_does_not_claim_train_time_when_none_found():
+    async def plan_fn(text):
+        return Plan(keywords="x", mode="pickup", home_station="吹田", chains=["hardoff"])
+
+    async def search_fn(chain, p, on_listing):
+        return [L("https://h.jp/1", 5000)]
+
+    async def commute(a, b):
+        return "no route found"
+
+    reply = asyncio.run(run_shop_search("x", plan_fn=plan_fn, search_fn=search_fn, commute=commute))
+    assert "train time" not in reply.answer.split(".")[0] and "couldn't find train times" in reply.answer

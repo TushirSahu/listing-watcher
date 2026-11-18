@@ -86,3 +86,9 @@ def test_report_listing_carries_shop_fields():
         url="https://netmall.hardoff.co.jp/product/1", title="x", price=1, why_matches="", verified=True,
         branch="ハードオフ吹田店", branch_station="吹田", condition_grade="B"))
     assert (got[0].branch, got[0].branch_station, got[0].condition_grade) == ("ハードオフ吹田店", "吹田", "B")
+
+
+def test_parse_commute_highlighted_fare():
+    page = ('<span class="small">25分</span></li><li class="fare"><span class="mark">370<!-- -->円</span></li>'
+            '<li class="transfer">乗換：<span class="mark">1<!-- -->回</span></li>')
+    assert parse_commute(page) == "25 min, 1 transfer, ¥370"

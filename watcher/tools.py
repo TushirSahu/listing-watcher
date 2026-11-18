@@ -11,7 +11,7 @@ from watcher.models import Listing
 
 TRANSIT_URL = "https://transit.yahoo.co.jp/search/result"
 _ROUTE = re.compile(
-    r'<span class="small">(?:(\d+)時間)?(\d+)分</span></li>\s*<li class="fare">([\d,]+)<!-- -->円</li>'
+    r'<span class="small">(?:(\d+)時間)?(\d+)分</span></li>\s*<li class="fare">(?:<span class="mark">)?([\d,]+)<!-- -->円(?:</span>)?</li>'
     r'\s*<li class="transfer">乗換：<span class="mark">(\d+)'
 )
 
