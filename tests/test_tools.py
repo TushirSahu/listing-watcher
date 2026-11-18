@@ -78,3 +78,11 @@ def test_report_listing_explains_relative_link():
     out = asyncio.run(_tool(make_tools(got.append), "report_listing").function(
         url="/item/m123", title="x", price=1, why_matches="", verified=True))
     assert got == [] and "full https link" in out and "https://jp.mercari.com/item/m123" in out
+
+
+def test_report_listing_carries_shop_fields():
+    got = []
+    asyncio.run(_tool(make_tools(got.append), "report_listing").function(
+        url="https://netmall.hardoff.co.jp/product/1", title="x", price=1, why_matches="", verified=True,
+        branch="ハードオフ吹田店", branch_station="吹田", condition_grade="B"))
+    assert (got[0].branch, got[0].branch_station, got[0].condition_grade) == ("ハードオフ吹田店", "吹田", "B")

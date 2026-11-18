@@ -93,11 +93,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "web":
         from watcher.history import DEFAULT_PATH, History
+        from watcher.shops import make_shop_search
         from watcher.web import create_app
 
         print(f"open http://localhost:{args.port}  (Ctrl+C to stop)")
         history = History(os.environ.get("HISTORY_DB") or DEFAULT_PATH)
-        uvicorn.run(create_app(session, history), host=args.host, port=args.port, log_level="warning")
+        shop_search = make_shop_search(session.llm, {
+            "headless": session.headless, "max_context_chars": session.max_context_chars,
+            "injection_check": session.injection_check, "step_budget": session.step_budget})
+        uvicorn.run(create_app(session, history, shop_search), host=args.host, port=args.port, log_level="warning")
         return 0
     print(HELP)
 

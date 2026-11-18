@@ -50,9 +50,11 @@ def make_tools(on_listing: Callable[[Listing], int | None] | None = None) -> Too
     @tools.action("Show one confirmed matching listing to the user right away, before your final answer. "
                   "Call it for each listing you would include in your results.")
     async def report_listing(url: str, title: str, price: int | None, why_matches: str, verified: bool,
-                             item_key: str | None = None, image_url: str | None = None) -> str:
+                             item_key: str | None = None, image_url: str | None = None, branch: str | None = None,
+                             branch_station: str | None = None, condition_grade: str | None = None) -> str:
         item = Listing(url=url, title=title, price=price, why_matches=why_matches, matches=True,
-                       verified=verified, item_key=item_key, image_url=image_url)
+                       verified=verified, item_key=item_key, image_url=image_url, branch=branch,
+                       branch_station=branch_station, condition_grade=condition_grade)
         cleaned = clean_listings([item])
         if not cleaned:
             return ("not shown: url must be a full https link to the listing's own page, "

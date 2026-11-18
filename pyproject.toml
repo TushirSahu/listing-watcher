@@ -13,6 +13,7 @@ dependencies = [
     "starlette==1.10.0",
     "uvicorn==0.54.0",
     "httpx==0.28.1",
+    "langgraph==1.2.22",
 ]
 
 [project.optional-dependencies]

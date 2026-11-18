@@ -17,6 +17,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from watcher.history import History, recap
 from watcher.listings import clean_listings
+from watcher.shops import current_chain
 from watcher.models import Reply
 
 INDEX = Path(__file__).parent / "static" / "index.html"
@@ -110,8 +111,8 @@ class Chat:
     """The shared conversation: agent session, saved history, connected pages, the running turn.
     Event protocol v1: every event is {"v": 1, "type": ..., "conv": id, ...}; unknown client types are ignored."""
 
-    def __init__(self, session, history: History):
-        self.session, self.history = session, history
+    def __init__(self, session, history: History, shop_search=None):
+        self.session, self.history, self.shop_search = session, history, shop_search
         self.session.on_listing = self.on_listing
         self.sockets: set[WebSocket] = set()
         self.busy, self.task, self.loop = False, None, None
@@ -166,9 +167,16 @@ class Chat:
         self.messages.append({"role": "you", "text": text, "listings": [], "steps": None, "cost": None})
         await self.broadcast(self.event("message", role="you", text=text))
         prompt = f"{recap(self.messages[:-1])}\n\nNew message: {text}" if self.needs_recap else text
+        first_search = not any(m["listings"] for m in self.messages)
         try:
-            reply = await self.session.ask(prompt)
-            self.needs_recap = False
+            reply = None
+            if self.shop_search and first_search:  # multi-agent shop search; None = not a shop request
+                reply = await self.shop_search(text, self.on_listing)
+            if reply is not None:
+                self.needs_recap = True  # follow-ups go to the single agent, which needs the results recapped
+            else:
+                reply = await self.session.ask(prompt)
+                self.needs_recap = False
         except asyncio.CancelledError:
             await self.session.close()  # agent state is unknown after a cancel; next turn starts fresh
             self.needs_recap = True
@@ -204,11 +212,12 @@ class _StepHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         if text := step_text(record.getMessage()):
-            self.chat.on_step(text)
+            chain = current_chain.get()  # set per parallel shop agent
+            self.chat.on_step(f"[{chain}] {text}" if chain else text)
 
 
-def create_app(session, history: History | None = None) -> Starlette:
-    chat = Chat(session, history or History())
+def create_app(session, history: History | None = None, shop_search=None) -> Starlette:
+    chat = Chat(session, history or History(), shop_search)
     log = logging.getLogger("browser_use")
     for h in log.handlers:  # keep the terminal quiet; steps go to the page instead
         h.setLevel(logging.WARNING)

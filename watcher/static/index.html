@@ -160,6 +160,7 @@
   .card .lowest { font: 11px var(--mono); color: var(--live); border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; }
   .card .title { font-size: 13.5px; font-weight: 500; line-height: 1.4; margin: 0;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .where { font: 11.5px var(--mono); color: var(--text); margin: 0; }
   .card .why { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.5; }
   .card .why .unverified { color: var(--faint); }
   .card a {
@@ -261,7 +262,7 @@ const log = $("log"), feed = $("feed"), tags = $("tags"), input = $("input");
 const EXAMPLES = [
   "Used Sony WH-1000XM5 under ¥25,000 with the case included, on Mercari",
   "1K or 1LDK in Suita under ¥70,000 a month, 10 minutes from a station, on SUUMO",
-  "Nintendo Switch OLED, working, with dock, under ¥28,000",
+  "Nintendo Switch OLED under ¥28,000 from second-hand shops — I'll pick it up, I'm near 吹田 station",
 ];
 let ws, busy = false, steps = 0, retry = 500;
 
@@ -373,6 +374,8 @@ function makeCard(l, i, total, provisional) {
     row.append(el("span", "price", yen(l.price)));
     if (!provisional && total > 1 && l.price != null && l.price === lowestPrice) row.append(el("span", "lowest", "lowest"));
     body.append(row, el("h3", "title", l.title));
+    const where = [l.shop, l.branch, l.condition_grade && `grade ${l.condition_grade}`].filter(Boolean).join(" · ");
+    if (where) body.append(el("p", "where", where));
     const why = el("p", "why", l.why_matches);
     if (!l.verified) why.append(" ", el("span", "unverified", "· not opened"));
     body.append(why);

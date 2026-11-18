@@ -251,3 +251,42 @@ def test_cancel_keeps_cards_found_so_far(tmp_path):
     assert [l["url"] for l in cancelled["listings"]] == ["https://x.jp/1"]
     saved = History(tmp_path / "h.db").messages(conv)
     assert saved[-1]["text"] == "Cancelled." and saved[-1]["listings"][0]["url"] == "https://x.jp/1"
+
+
+def test_first_search_goes_to_shop_graph_then_follow_up_to_agent(tmp_path):
+    from watcher.shops import current_chain
+    calls = []
+
+    async def shop_search(text, on_listing):
+        calls.append(text)
+        current_chain.set("Hard Off")
+        logging.getLogger("browser_use").info("step 3: # check the condition grade")
+        on_listing(GOOD)
+        await asyncio.sleep(0)
+        return Reply(answer="Searched 4 shops", listings=[GOOD])
+
+    s = FakeSession()
+    app = create_app(s, History(tmp_path / "h.db"), shop_search=shop_search)
+    with TestClient(app, base_url=BASE) as c, c.websocket_connect(WS) as ws:
+        ws.receive_json()
+        ws.send_json({"type": "ask", "text": "xm5 at second-hand shops"})
+        msgs = until(ws, "reply")
+        ws.send_json({"type": "ask", "text": "check #1"})
+        until(ws, "reply")
+    assert calls == ["xm5 at second-hand shops"]
+    assert msgs[-1]["text"] == "Searched 4 shops" and any(m["type"] == "listing" for m in msgs)
+    assert any(m["type"] == "step" and m["text"].startswith("[Hard Off] step 3") for m in msgs)
+    assert s.asked[0].startswith("Earlier in this conversation") and s.asked[0].endswith("check #1")
+
+
+def test_marketplace_request_falls_back_to_agent(tmp_path):
+    async def shop_search(text, on_listing):
+        return None
+
+    s = FakeSession()
+    app = create_app(s, History(tmp_path / "h.db"), shop_search=shop_search)
+    with TestClient(app, base_url=BASE) as c, c.websocket_connect(WS) as ws:
+        ws.receive_json()
+        ws.send_json({"type": "ask", "text": "xm5 on mercari"})
+        until(ws, "reply")
+    assert s.asked == ["xm5 on mercari"]

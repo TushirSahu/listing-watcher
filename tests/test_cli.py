@@ -183,3 +183,11 @@ def test_web_uses_history_db(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(app=app))
     assert main(["web"]) == 0
     assert (tmp_path / "x" / "h.db").exists()
+
+
+def test_web_enables_shop_search(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, LLM_PROVIDER="google", LLM_MODEL="m", GOOGLE_API_KEY="k")
+    seen = {}
+    monkeypatch.setattr(cli.uvicorn, "run", lambda app, host, port, **k: seen.update(app=app))
+    assert main(["web"]) == 0
+    assert seen["app"].state.chat.shop_search is not None
