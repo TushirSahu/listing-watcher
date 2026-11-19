@@ -10,3 +10,4 @@ watches.yaml
 learning/
 *.pdf
 build/
+evals/results/
