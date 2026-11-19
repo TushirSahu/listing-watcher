@@ -181,7 +181,7 @@ def test_marketplace_request_returns_none(monkeypatch):
 
 
 def test_branch_place_from_branch_name():
-    from watcher.shops import branch_place
+    from watcher.shop_pages import branch_place
     assert branch_place("ハードオフ白岡店") == "白岡"
     assert branch_place("ホビーオフ足立南花畑店") == "足立南花畑"
     assert branch_place("BOOKOFF 江坂店") == "江坂"

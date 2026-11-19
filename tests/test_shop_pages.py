@@ -3,7 +3,7 @@ import asyncio
 import httpx
 import pytest
 
-from watcher.shop_pages import NO_RESULTS, PARSERS, LayoutChanged, fetch_shop
+from watcher.shop_pages import CHAINS, PARSERS, LayoutChanged, fetch_shop
 
 # trimmed from real result pages (2026-11)
 HARDOFF = '''<div class="itemcolmn_item "> <a href="https://netmall.hardoff.co.jp/product/6717299/" >
@@ -70,7 +70,7 @@ def test_fetch_shop_filters_budget_and_handles_errors():
 
 def test_no_results_page_is_empty_not_failure():
     # Hard Off answers an empty search with status 404 and its 'no results' text
-    page = httpx.MockTransport(lambda r: httpx.Response(404, text=f"<p>{NO_RESULTS['hardoff']}</p>"))
+    page = httpx.MockTransport(lambda r: httpx.Response(404, text=f"<p>{CHAINS['hardoff'].no_results}</p>"))
     assert asyncio.run(fetch_shop("hardoff", "zqxj", None, page)) == []
 
 

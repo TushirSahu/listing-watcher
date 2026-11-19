@@ -19,17 +19,22 @@ from watcher.models import Listing
 @dataclass(frozen=True)
 class Chain:
     name: str
-    url: str   # search URL with {q}
-    site: str  # browser allowlist pattern
+    url: str         # search URL with {q}
+    site: str        # browser allowlist pattern
+    mark: str        # start of one result block on the search page
+    no_results: str  # text the shop shows when nothing matches
 
     def search_url(self, keywords: str) -> str:
         return self.url.format(q=quote(keywords))
 
 
 CHAINS = {
-    "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}&exso=1", "*.hardoff.co.jp"),
-    "bookoff": Chain("BOOKOFF", "https://shopping.bookoff.co.jp/search/keyword/{q}", "*.bookoff.co.jp"),
-    "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?word={q}", "*.treasure-f.com"),
+    "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}&exso=1", "*.hardoff.co.jp",
+                     '<div class="itemcolmn_item', "該当する商品が見つかりませんでした"),
+    "bookoff": Chain("BOOKOFF", "https://shopping.bookoff.co.jp/search/keyword/{q}", "*.bookoff.co.jp",
+                     'class="productItem__inner"', "該当する商品が見つかりませんでした"),
+    "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?word={q}", "*.treasure-f.com",
+                    'class="pj-search_item"', "検索結果（0件）"),
 }
 
 
@@ -49,10 +54,6 @@ def _yen(s: str | None) -> int | None:
     return int(s.replace(",", "")) if s else None
 
 
-def _page(pattern: str, ident: str | None) -> str | None:
-    return pattern.format(ident) if ident else None
-
-
 def _item(base: str, url, title, price, image=None, grade=None, branch=None, branch_url=None) -> Listing | None:
     if not url or not title:
         return None
@@ -62,47 +63,38 @@ def _item(base: str, url, title, price, image=None, grade=None, branch=None, bra
                    branch_url=branch_url)
 
 
-ITEM_MARK = {"hardoff": '<div class="itemcolmn_item', "bookoff": 'class="productItem__inner"',
-             "trefac": 'class="pj-search_item"'}  # start of one result block on each shop's page
+def _blocks(key: str, html: str) -> list[str]:
+    return html.split(CHAINS[key].mark)[1:]
+
+
+def _hardoff_title(b: str) -> str:
+    return " ".join(_text(t) for t in re.findall(r'class="item-(?:brand-name|name|code)">(.*?)</div>', b, re.S))
 
 
 def parse_hardoff(html: str) -> list[Listing]:
-    out = []
-    for b in html.split(ITEM_MARK["hardoff"])[1:]:
-        title = " ".join(_text(t) for t in re.findall(r'class="item-(?:brand-name|name|code)">(.*?)</div>', b, re.S))
-        out.append(_item("https://netmall.hardoff.co.jp/", _find(r'<a href="([^"]+)"', b), title,
-                         _find(r'item-price-en">\s*([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
-                         _find(r'icon-rank-[^"]*"\s+alt="([^"]+)"', b)))
-    return [i for i in out if i]
+    return [i for b in _blocks("hardoff", html) if (i := _item(
+        "https://netmall.hardoff.co.jp/", _find(r'<a href="([^"]+)"', b), _hardoff_title(b),
+        _find(r'item-price-en">\s*([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
+        _find(r'icon-rank-[^"]*"\s+alt="([^"]+)"', b)))]
 
 
 def parse_bookoff(html: str) -> list[Listing]:
-    out = []
-    for b in html.split(ITEM_MARK["bookoff"])[1:]:
-        if "在庫あり" not in b:
-            continue
-        out.append(_item("https://shopping.bookoff.co.jp/", _find(r'href="(/used/[^"]+)"', b),
-                         _find(r'productItem__title">(.*?)</p>', b), _find(r'&yen;\s*([\d,]+)', b),
-                         _find(r'<img[^>]*?\ssrc="([^"]+)"', b)))
-    return [i for i in out if i]
+    return [i for b in _blocks("bookoff", html) if "在庫あり" in b and (i := _item(
+        "https://shopping.bookoff.co.jp/", _find(r'href="(/used/[^"]+)"', b),
+        _find(r'productItem__title">(.*?)</p>', b), _find(r'&yen;\s*([\d,]+)', b),
+        _find(r'<img[^>]*?\ssrc="([^"]+)"', b)))]
 
 
 def parse_trefac(html: str) -> list[Listing]:
-    out = []
-    for b in html.split(ITEM_MARK["trefac"])[1:]:
-        if "cm-itemlist_soldout" in b:
-            continue
-        out.append(_item("https://ec.treasure-f.com/", _find(r'href="(/item/\d+)"', b), _find(r'alt="([^"]+)"', b),
-                         _find(r'cm-itemlist_price[^>]*>\s*￥([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
-                         branch=_find(r'cm-itemlist_shop_link.*?<span>(.*?)</span>', b),
-                         branch_url=_page("https://www.treasure-f.com/shop/{}/",
-                                          _find(r'cm-itemlist_shop_link.*?shop=(\d+)', b))))
-    return [i for i in out if i]
+    return [i for b in _blocks("trefac", html) if "cm-itemlist_soldout" not in b and (i := _item(
+        "https://ec.treasure-f.com/", _find(r'href="(/item/\d+)"', b), _find(r'alt="([^"]+)"', b),
+        _find(r'cm-itemlist_price[^>]*>\s*￥([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
+        branch=_find(r'cm-itemlist_shop_link.*?<span>(.*?)</span>', b),
+        branch_url=f"https://www.treasure-f.com/shop/{sid}/" if (sid := _find(r'cm-itemlist_shop_link.*?shop=(\d+)', b))
+        else None))]
 
 
 PARSERS = {"hardoff": parse_hardoff, "bookoff": parse_bookoff, "trefac": parse_trefac}
-NO_RESULTS = {"hardoff": "該当する商品が見つかりませんでした", "bookoff": "該当する商品が見つかりませんでした",
-              "trefac": "検索結果（0件）"}  # text each shop shows when nothing matches
 
 
 class LayoutChanged(Exception):
@@ -116,12 +108,11 @@ async def fetch_shop(key: str, keywords: str, max_price: int | None = None,
     chain = CHAINS[key]
     async with httpx.AsyncClient(timeout=20, transport=transport, headers={"User-Agent": UA}) as client:
         resp = await client.get(chain.search_url(keywords))
-    empty = NO_RESULTS[key] in resp.text
-    if empty and resp.status_code in (200, 404):
+    if chain.no_results in resp.text and resp.status_code in (200, 404):
         return []
     resp.raise_for_status()
     items = [i.model_copy(update={"shop": chain.name}) for i in PARSERS[key](resp.text)]
-    if not items and ITEM_MARK[key] not in resp.text:  # blocks present but none kept (e.g. all sold out) is fine
+    if not items and chain.mark not in resp.text:  # blocks present but none kept (e.g. all sold out) is fine
         raise LayoutChanged(chain.name)
     return [i for i in items if max_price is None or (i.price is not None and i.price <= max_price)]
 
@@ -200,8 +191,8 @@ class Plan(BaseModel):
 CommuteFn = Callable[[str, str], Awaitable[str]]
 
 _CHAIN_PREFIX = re.compile(
-    r"^(ハードオフ|オフハウス|ホビーオフ|ガレージオフ|モードオフ|ブックオフ|BOOKOFF|トレジャーファクトリー|トレファク|"
-    r"セカンドストリート|2nd STREET)(工具館|スーパーバザー)?\s*"
+    r"^(ハードオフ|オフハウス|ホビーオフ|ガレージオフ|モードオフ|ブックオフ|BOOKOFF|トレジャーファクトリー|トレファク)"
+    r"(工具館|スーパーバザー)?\s*"
 )
 
 

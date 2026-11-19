@@ -5,7 +5,6 @@
 The plan, search and commute steps are passed in, so the graph is testable without AI or network."""
 import asyncio
 import operator
-import re
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from typing import Annotated, TypedDict
@@ -18,8 +17,7 @@ from pydantic_ai import Agent as PlanAgent
 from watcher.agent import ChatSession
 from watcher.listings import clean_listings
 from watcher.models import Listing, Reply
-from watcher.shop_pages import (CHAINS, PARSERS, Chain, CommuteFn, Plan, add_branches, branch_place, fetch_shop,
-                                 rank)
+from watcher.shop_pages import CHAINS, Chain, CommuteFn, Plan, add_branches, fetch_shop, rank
 from watcher.tools import lookup_commute
 
 MAX_PARALLEL = 3  # browsers at once: memory + free-tier rate limits
@@ -180,19 +178,16 @@ def make_shop_search(llm, session_kwargs: dict):
         return reply.listings
 
     async def search_fn(key: str, plan: Plan, on_listing, request: str) -> list[Listing]:
-        if key in PARSERS:
-            try:
-                found = await fetch_shop(key, plan.keywords, plan.max_price)
-            except Exception:
-                found = None  # blocked or page changed: let the browser agent try
-            if found is not None:
-                items = await pick(request, plan, found)
-                if plan.mode == "pickup" and plan.home_station:
-                    items = await add_branches(items)
-                for i in items:
-                    on_listing(i)
-                return items
-        return await browse(key, plan, on_listing)
+        try:
+            found = await fetch_shop(key, plan.keywords, plan.max_price)
+        except Exception:
+            return await browse(key, plan, on_listing)  # blocked or page changed: let the browser agent try
+        items = await pick(request, plan, found)
+        if plan.mode == "pickup" and plan.home_station:
+            items = await add_branches(items)
+        for i in items:
+            on_listing(i)
+        return items
 
     async def shop_search(text: str, on_listing) -> Reply | None:
         async def search(key, plan, notify):
