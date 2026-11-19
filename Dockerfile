@@ -15,4 +15,4 @@ USER app
 ENV ANONYMIZED_TELEMETRY=false PYTHONUNBUFFERED=1 HOME=/home/app
 EXPOSE 8000
 # 0.0.0.0 inside the container only; docker-compose publishes it to 127.0.0.1 on your machine
-CMD ["listing-watcher", "web", "--host", "0.0.0.0"]
+CMD ["thrift-scout", "web", "--host", "0.0.0.0"]

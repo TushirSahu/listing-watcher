@@ -3,8 +3,8 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "listing-watcher"
-version = "0.1.0"
+name = "thrift-scout"
+version = "0.2.0"
 description = "Chat with a browser agent that finds and compares listings (Mercari, SUUMO, ...)"
 requires-python = ">=3.11"
 license = "MIT"
@@ -24,8 +24,8 @@ agent = [  # web page and terminal chat (browser agent, multi-agent graph)
 dev = ["pytest==9.2.0", "pytest-asyncio==1.5.0"]
 
 [project.scripts]
-listing-watcher = "watcher.cli:main"
-listing-watcher-mcp = "watcher.mcp_server:main"
+thrift-scout = "watcher.cli:main"
+thrift-scout-mcp = "watcher.mcp_server:main"
 
 [tool.setuptools]
 packages = ["watcher"]

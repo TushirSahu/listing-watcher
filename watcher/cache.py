@@ -1,5 +1,5 @@
 """Small persistent cache for slow lookups (train routes, branch addresses): one SQLite file, entries expire after
-30 days. Path: $CACHE_DB, else ~/.listing-watcher/cache.db. A broken cache file never breaks a lookup."""
+30 days. Path: $CACHE_DB, else ~/.thrift-scout/cache.db. A broken cache file never breaks a lookup."""
 import json
 import os
 import sqlite3
@@ -11,7 +11,7 @@ MAX_AGE = 30 * 24 * 3600  # seconds
 
 
 def _db() -> sqlite3.Connection:
-    path = Path(os.environ.get("CACHE_DB") or Path.home() / ".listing-watcher" / "cache.db")
+    path = Path(os.environ.get("CACHE_DB") or Path.home() / ".thrift-scout" / "cache.db")
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db.execute("CREATE TABLE IF NOT EXISTS cache (kind TEXT, key TEXT, value TEXT, saved REAL, PRIMARY KEY (kind, key))")

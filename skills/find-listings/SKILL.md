@@ -5,7 +5,7 @@ description: Find used items at Japanese second-hand shop chains (Hard Off, BOOK
 
 # Find used items in Japanese second-hand shops
 
-Tools (from the `listing-watcher` MCP server):
+Tools (from the `thrift-scout` MCP server):
 - `search_shops(keywords, max_price?, chains?, home_station?)`: in-stock items from the chains' online shops.
 - `commute_time(from_station, to_station)`: fastest train route, e.g. "24 min, 1 transfer, ¥370".
 

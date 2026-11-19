@@ -92,7 +92,7 @@ def _session(headless: bool) -> ChatSession:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="listing-watcher", description="Chat with a browser agent that finds listings.")
+    parser = argparse.ArgumentParser(prog="thrift-scout", description="Chat with a browser agent that finds listings.")
     sub = parser.add_subparsers(dest="cmd", required=True)
     chat_p = sub.add_parser("chat", help="start a conversation")
     chat_p.add_argument("--show-browser", action="store_true", help="show the browser window")

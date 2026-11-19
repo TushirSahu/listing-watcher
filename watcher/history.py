@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_PATH = Path.home() / ".listing-watcher" / "history.db"
+DEFAULT_PATH = Path.home() / ".thrift-scout" / "history.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (

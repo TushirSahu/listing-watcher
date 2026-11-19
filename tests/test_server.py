@@ -60,7 +60,7 @@ def connect(c):
 
 def test_index_served(tmp_path):
     r = TestClient(app_for(tmp_path), base_url=BASE).get("/")
-    assert r.status_code == 200 and "listing-watcher" in r.text
+    assert r.status_code == 200 and "Thrift Scout" in r.text
 
 
 def test_every_event_is_versioned(tmp_path):

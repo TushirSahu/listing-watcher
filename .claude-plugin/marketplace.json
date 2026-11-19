@@ -1,12 +1,12 @@
 {
-  "name": "listing-watcher",
+  "name": "thrift-scout",
   "description": "Japanese second-hand shop search for Claude Code.",
   "owner": {
     "name": "TushirSahu"
   },
   "plugins": [
     {
-      "name": "listing-watcher",
+      "name": "thrift-scout",
       "source": "./",
       "description": "Find used items at Japanese second-hand shop chains, with train times to their branches."
     }

@@ -135,7 +135,7 @@ async def test_ctrl_c_closes():
 
 def _env(monkeypatch, tmp_path, **env):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("HISTORY_DB", str(tmp_path / "history.db"))  # never touch the real ~/.listing-watcher
+    monkeypatch.setenv("HISTORY_DB", str(tmp_path / "history.db"))  # never touch the real ~/.thrift-scout
     for k in ("LLM_PROVIDER", "LLM_MODEL", "ANTHROPIC_API_KEY", "LLM_MAX_CONTEXT_CHARS", "ALLOWED_SITES",
               "INJECTION_CHECK", "MAX_STEPS_PER_RUN"):
         monkeypatch.delenv(k, raising=False)
