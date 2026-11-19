@@ -7,7 +7,7 @@ import logging
 from mcp.server.mcpserver import MCPServer
 
 from watcher.listings import clean_listings
-from watcher.shop_pages import PARSERS, fetch_shop
+from watcher.shop_pages import PARSERS, LayoutChanged, fetch_shop
 from watcher.shops import CHAINS, Plan, rank
 from watcher.tools import lookup_commute
 
@@ -26,7 +26,8 @@ async def search_shops(keywords: str, max_price: int | None = None, chains: list
     in-store pick-up; results are then sorted by train time to each branch (when known), else by price."""
     keys = [k for k in (chains or list(PARSERS)) if k in PARSERS]
     found = await asyncio.gather(*(fetch_shop(k, keywords, max_price) for k in keys), return_exceptions=True)
-    failed = [CHAINS[k].name for k, r in zip(keys, found) if isinstance(r, BaseException)]
+    failed = [f"{CHAINS[k].name} ({'page layout changed' if isinstance(r, LayoutChanged) else 'could not load'})"
+              for k, r in zip(keys, found) if isinstance(r, BaseException)]
     items = clean_listings([i for r in found if not isinstance(r, BaseException) for i in r])
     plan = Plan(keywords=keywords, max_price=max_price, mode="pickup" if home_station else "ship",
                 home_station=home_station)

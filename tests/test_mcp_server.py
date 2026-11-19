@@ -2,6 +2,7 @@ import httpx
 
 import watcher.mcp_server as srv
 from watcher.models import Listing
+from watcher.shop_pages import LayoutChanged
 
 
 def L(url, price, branch=None):
@@ -18,7 +19,16 @@ async def test_search_shops_merges_ranks_and_reports_failures(monkeypatch):
     monkeypatch.setattr(srv, "fetch_shop", fetch)
     out = await srv.search_shops("WH-1000XM5", chains=["hardoff", "bookoff", "trefac", "nope"])
     assert [r["price"] for r in out["results"]] == [7000, 9000]   # junk link cleaned, cheapest first
-    assert out["failed"] == ["Treasure Factory"] and "untrusted" in out["note"]
+    assert out["failed"] == ["Treasure Factory (could not load)"] and "untrusted" in out["note"]
+
+
+async def test_layout_change_is_reported(monkeypatch):
+    async def fetch(key, keywords, max_price):
+        raise LayoutChanged("BOOKOFF")
+
+    monkeypatch.setattr(srv, "fetch_shop", fetch)
+    out = await srv.search_shops("x", chains=["bookoff"])
+    assert out["failed"] == ["BOOKOFF (page layout changed)"] and out["results"] == []
 
 
 async def test_search_shops_pickup_adds_train_time(monkeypatch):

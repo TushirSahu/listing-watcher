@@ -35,9 +35,13 @@ def _item(base: str, url, title, price, image=None, grade=None, branch=None) -> 
                    condition_grade=grade.upper() if grade else None, branch=_text(branch) if branch else None)
 
 
+ITEM_MARK = {"hardoff": '<div class="itemcolmn_item', "bookoff": 'class="productItem__inner"',
+             "trefac": 'class="pj-search_item"'}  # start of one result block on each shop's page
+
+
 def parse_hardoff(html: str) -> list[Listing]:
     out = []
-    for b in html.split('<div class="itemcolmn_item')[1:]:
+    for b in html.split(ITEM_MARK["hardoff"])[1:]:
         title = " ".join(_text(t) for t in re.findall(r'class="item-(?:brand-name|name|code)">(.*?)</div>', b, re.S))
         out.append(_item("https://netmall.hardoff.co.jp/", _find(r'<a href="([^"]+)"', b), title,
                          _find(r'item-price-en">\s*([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
@@ -47,7 +51,7 @@ def parse_hardoff(html: str) -> list[Listing]:
 
 def parse_bookoff(html: str) -> list[Listing]:
     out = []
-    for b in html.split('class="productItem__inner"')[1:]:
+    for b in html.split(ITEM_MARK["bookoff"])[1:]:
         if "在庫あり" not in b:
             continue
         out.append(_item("https://shopping.bookoff.co.jp/", _find(r'href="(/used/[^"]+)"', b),
@@ -58,7 +62,9 @@ def parse_bookoff(html: str) -> list[Listing]:
 
 def parse_trefac(html: str) -> list[Listing]:
     out = []
-    for b in html.split('class="pj-search_item"')[1:]:
+    for b in html.split(ITEM_MARK["trefac"])[1:]:
+        if "cm-itemlist_soldout" in b:
+            continue
         out.append(_item("https://ec.treasure-f.com/", _find(r'href="(/item/\d+)"', b), _find(r'alt="([^"]+)"', b),
                          _find(r'cm-itemlist_price[^>]*>\s*￥([\d,]+)', b), _find(r'<img[^>]*?\ssrc="([^"]+)"', b),
                          branch=_find(r'cm-itemlist_shop_link.*?<span>(.*?)</span>', b)))
@@ -66,14 +72,26 @@ def parse_trefac(html: str) -> list[Listing]:
 
 
 PARSERS = {"hardoff": parse_hardoff, "bookoff": parse_bookoff, "trefac": parse_trefac}  # 2nd STREET: 403 to plain HTTP
+NO_RESULTS = {"hardoff": "該当する商品が見つかりませんでした", "bookoff": "該当する商品が見つかりませんでした",
+              "trefac": "検索結果（0件）"}  # text each shop shows when nothing matches
+
+
+class LayoutChanged(Exception):
+    """The page loaded but neither listings nor the shop's 'no results' text were found: the parser needs updating."""
 
 
 async def fetch_shop(key: str, keywords: str, max_price: int | None = None,
                      transport: httpx.AsyncBaseTransport | None = None) -> list[Listing]:
-    """One chain's in-stock results within budget. Raises on HTTP errors (caller reports the shop as failed)."""
+    """One chain's in-stock results within budget. Raises on HTTP errors and LayoutChanged (caller reports the shop
+    as failed). An honest 'no results' page (Hard Off sends it with status 404) returns []."""
     chain = CHAINS[key]
     async with httpx.AsyncClient(timeout=20, transport=transport, headers={"User-Agent": UA}) as client:
         resp = await client.get(chain.search_url(keywords))
+    empty = NO_RESULTS[key] in resp.text
+    if empty and resp.status_code in (200, 404):
+        return []
     resp.raise_for_status()
     items = [i.model_copy(update={"shop": chain.name}) for i in PARSERS[key](resp.text)]
+    if not items and ITEM_MARK[key] not in resp.text:  # blocks present but none kept (e.g. all sold out) is fine
+        raise LayoutChanged(chain.name)
     return [i for i in items if max_price is None or (i.price is not None and i.price <= max_price)]

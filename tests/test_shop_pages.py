@@ -1,8 +1,9 @@
 import asyncio
 
 import httpx
+import pytest
 
-from watcher.shop_pages import PARSERS, fetch_shop
+from watcher.shop_pages import NO_RESULTS, PARSERS, LayoutChanged, fetch_shop
 
 # trimmed from real result pages (2026-11)
 HARDOFF = '''<div class="itemcolmn_item "> <a href="https://netmall.hardoff.co.jp/product/6717299/" >
@@ -21,7 +22,10 @@ BOOKOFF = '''<div class="productItem__inner"> <a href="/used/0020695349" class="
 TREFAC = '''<li class="pj-search_item"> <a class="cm-itemlist_itemcode_link" href="/item/1029007938733034" >
 <div class="cm-itemlist_image"> <img src="/images/1029007938733034/340/a.jpeg" width="340" height="340" alt="SONY (ソニー) ワイヤレスヘッドホン WH-1000XM5 小キズ有"> </div>
 <div class="cm-itemlist_price_wrap"> <p class="cm-typo_head4 cm-itemlist_price is-sale">￥16,500</p> </div> </a>
-<div class="cm-itemlist_shop_link"> <a href="/search?step=1&shop=34"> <img src="/logo.svg" alt=""> <span>北越谷店</span> </a> </div> </li>'''
+<div class="cm-itemlist_shop_link"> <a href="/search?step=1&shop=34"> <img src="/logo.svg" alt=""> <span>北越谷店</span> </a> </div> </li>
+<li class="pj-search_item"> <a class="cm-itemlist_itemcode_link" href="/item/1051007026851626" >
+<img class="image-lazyload" data-src="/images/1051007026851626/340/b.jpeg" alt="SONY (ソニー) ワイヤレスヘッドホン WH-1000XM5">
+<span class="cm-itemlist_soldout"> <i>SOLD OUT</i> </span> </a> <span>八尾店</span> </li>'''
 
 
 def test_hardoff():
@@ -62,3 +66,27 @@ def test_fetch_shop_filters_budget_and_handles_errors():
         assert False, "403 must raise so the caller can report the shop as failed"
     except httpx.HTTPStatusError:
         pass
+
+
+def test_no_results_page_is_empty_not_failure():
+    # Hard Off answers an empty search with status 404 and its 'no results' text
+    page = httpx.MockTransport(lambda r: httpx.Response(404, text=f"<p>{NO_RESULTS['hardoff']}</p>"))
+    assert asyncio.run(fetch_shop("hardoff", "zqxj", None, page)) == []
+
+
+def test_unparseable_page_is_layout_change():
+    page = httpx.MockTransport(lambda r: httpx.Response(200, text="<html>" + "x" * 5000 + "</html>"))
+    with pytest.raises(LayoutChanged):
+        asyncio.run(fetch_shop("trefac", "WH-1000XM5", None, page))
+
+
+def test_hardoff_404_without_marker_still_fails():
+    page = httpx.MockTransport(lambda r: httpx.Response(404, text="gone"))
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(fetch_shop("hardoff", "x", None, page))
+
+
+def test_all_out_of_stock_is_empty_not_layout_change():
+    sold_out = BOOKOFF.split("<div", 2)[0] + "<div" + BOOKOFF.split("<div", 2)[2]  # only the 在庫なし block
+    page = httpx.MockTransport(lambda r: httpx.Response(200, text=sold_out))
+    assert asyncio.run(fetch_shop("bookoff", "x", None, page)) == []
