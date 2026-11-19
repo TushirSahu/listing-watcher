@@ -1,0 +1,17 @@
+[
+  {"id": "xm5-ship", "keywords": "WH-1000XM5", "max_price": 25000, "title_has": ["1000xm5"]},
+  {"id": "xm5-pickup-suita", "keywords": "WH-1000XM5", "max_price": 25000, "home_station": "吹田", "title_has": ["1000xm5"], "min_timed": 0.3},
+  {"id": "switch", "keywords": "ニンテンドースイッチ", "max_price": 30000, "title_has": ["スイッチ", "switch"]},
+  {"id": "onepiece-bookoff", "keywords": "ワンピース", "max_price": 600, "chains": ["bookoff"], "title_has": ["onepiece", "ワンピース"]},
+  {"id": "airpods", "keywords": "AirPods Pro", "max_price": 20000, "title_has": ["airpods"]},
+  {"id": "ipad", "keywords": "iPad", "max_price": 40000, "title_has": ["ipad"]},
+  {"id": "roomba", "keywords": "ルンバ", "max_price": 30000, "title_has": ["ルンバ", "roomba"]},
+  {"id": "ps5", "keywords": "PS5", "max_price": 50000, "title_has": ["ps5", "playstation5", "プレイステーション5"]},
+  {"id": "gopro-pickup-umeda", "keywords": "GoPro", "home_station": "梅田", "title_has": ["gopro"], "min_timed": 0.3},
+  {"id": "microwave-pickup-sapporo", "keywords": "電子レンジ", "max_price": 10000, "home_station": "札幌", "title_has": ["電子レンジ", "レンジ"], "min_timed": 0.3},
+  {"id": "dyson", "keywords": "ダイソン 掃除機", "max_price": 30000, "title_has": ["dyson", "ダイソン"]},
+  {"id": "harry-potter-bookoff", "keywords": "ハリー・ポッター", "chains": ["bookoff"], "title_has": ["ハリー"]},
+  {"id": "kindle", "keywords": "Kindle", "max_price": 15000, "title_has": ["kindle"]},
+  {"id": "guitar-pickup-esaka", "keywords": "エレキギター", "max_price": 30000, "home_station": "江坂", "title_has": ["ギター", "guitar"], "min_timed": 0.3},
+  {"id": "nonsense", "keywords": "zqxjvwk9183", "min_results": 0, "max_results": 0}
+]

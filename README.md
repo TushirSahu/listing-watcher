@@ -134,5 +134,7 @@ This tool is for personal use. You are responsible for following each site's ter
 
 ```bash
 pip install -e '.[dev]'
-pytest
+pytest                 # offline tests
+pytest -m live         # real shop pages still parse (run before trusting a parser change)
+python evals/run.py    # score the shop search on fixed requests: precision, budget, train-time coverage
 ```
