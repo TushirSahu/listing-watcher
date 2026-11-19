@@ -15,7 +15,7 @@ Requires Python 3.11+.
 ```bash
 git clone https://github.com/TushirSahu/listing-watcher && cd listing-watcher
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install -e '.[agent]'
 cp .env.example .env      # choose a provider, paste your API key
 ```
 
@@ -133,7 +133,7 @@ This tool is for personal use. You are responsible for following each site's ter
 ## Development
 
 ```bash
-pip install -e '.[dev]'
+pip install -e '.[agent,dev]'
 pytest                 # offline tests
 pytest -m live         # real shop pages still parse (run before trusting a parser change)
 python evals/run.py    # score the shop search on fixed requests: precision, budget, train-time coverage

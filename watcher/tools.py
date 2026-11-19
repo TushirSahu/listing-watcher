@@ -3,12 +3,15 @@ arguments, return short text for the model, never raise, and never fetch a URL t
 import asyncio
 import re
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import httpx
-from browser_use import Tools
 
 from watcher.listings import clean_listings
 from watcher.models import Listing
+
+if TYPE_CHECKING:
+    from browser_use import Tools
 
 TRANSIT_URL = "https://transit.yahoo.co.jp/search/result"
 _ROUTE = re.compile(
@@ -50,8 +53,10 @@ async def lookup_commute(from_station: str, to_station: str,
     return route
 
 
-def make_tools(on_listing: Callable[[Listing], int | None] | None = None) -> Tools:
+def make_tools(on_listing: Callable[[Listing], int | None] | None = None) -> "Tools":
     """The agent's tool set. on_listing receives each confirmed listing as it is found (for streaming)."""
+    from browser_use import Tools  # imported here so the plugin server never loads browser-use
+
     tools = Tools()
 
     @tools.action("Train time between two stations in Japan, e.g. commute_time('吹田', '石橋阪大前'). "

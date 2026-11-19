@@ -7,8 +7,7 @@ import logging
 from mcp.server.mcpserver import MCPServer
 
 from watcher.listings import clean_listings
-from watcher.shop_pages import PARSERS, LayoutChanged, add_branches, fetch_shop
-from watcher.shops import CHAINS, Plan, rank
+from watcher.shop_pages import CHAINS, PARSERS, LayoutChanged, Plan, add_branches, fetch_shop, rank
 from watcher.tools import lookup_commute
 
 server = MCPServer("listing-watcher")

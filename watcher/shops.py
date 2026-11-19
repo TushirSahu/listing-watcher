@@ -8,7 +8,7 @@ import operator
 import re
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
@@ -18,20 +18,12 @@ from pydantic_ai import Agent as PlanAgent
 from watcher.agent import ChatSession
 from watcher.listings import clean_listings
 from watcher.models import Listing, Reply
-from watcher.shop_pages import CHAINS, PARSERS, Chain, add_branches, fetch_shop
+from watcher.shop_pages import (CHAINS, PARSERS, Chain, CommuteFn, Plan, add_branches, branch_place, fetch_shop,
+                                 rank)
 from watcher.tools import lookup_commute
 
 MAX_PARALLEL = 3  # browsers at once: memory + free-tier rate limits
 current_chain: ContextVar[str | None] = ContextVar("current_chain", default=None)  # tags step lines per chain
-
-
-class Plan(BaseModel):
-    target: Literal["shops", "marketplaces"] = "shops"  # marketplaces (Mercari…) stay with the single agent
-    keywords: str
-    max_price: int | None = None
-    mode: Literal["ship", "pickup"] = "ship"
-    home_station: str | None = None
-    chains: list[str] = list(CHAINS)
 
 
 class State(TypedDict, total=False):
@@ -44,39 +36,6 @@ class State(TypedDict, total=False):
 
 PlanFn = Callable[[str], Awaitable[Plan]]
 SearchFn = Callable[[str, Plan, Callable[[Listing], object]], Awaitable[list[Listing]]]
-CommuteFn = Callable[[str, str], Awaitable[str]]
-
-_CHAIN_PREFIX = re.compile(
-    r"^(ハードオフ|オフハウス|ホビーオフ|ガレージオフ|モードオフ|ブックオフ|BOOKOFF|トレジャーファクトリー|トレファク|"
-    r"セカンドストリート|2nd STREET)(工具館|スーパーバザー)?\s*"
-)
-
-
-def branch_place(branch: str | None) -> str | None:
-    """'ハードオフ白岡店' -> '白岡': branch names usually carry the place, which is usually a station name."""
-    if not branch:
-        return None
-    place = _CHAIN_PREFIX.sub("", branch.strip()).removesuffix("店").strip()
-    return place or None
-
-
-_GRADES = {g: i for i, g in enumerate(["N", "S", "A", "B", "C", "D", "J"])}
-_MIN = re.compile(r"(\d+) min")
-
-
-async def rank(plan: Plan, items: list[Listing], commute: CommuteFn | None) -> list[Listing]:
-    """ship: cheapest first, better grade breaks ties. pickup: shortest train trip first, then price."""
-    by_price = sorted(items, key=lambda i: (i.price is None, i.price or 0, _GRADES.get((i.condition_grade or "?")[0], 9)))
-    if plan.mode != "pickup" or not plan.home_station or commute is None:
-        return by_price
-    where = lambda i: i.branch_station or branch_place(i.branch)  # note: name-based guess when no station given
-    stations = sorted({where(i) for i in items if where(i)})
-    found = await asyncio.gather(*(commute(plan.home_station, s) for s in stations))
-    minutes = {s: int(m[1]) for s, t in zip(stations, found) if (m := _MIN.search(t))}
-    ranked = sorted(by_price, key=lambda i: minutes.get(where(i), 10**6))  # stable: keeps price order
-    note = lambda i: " · ".join(filter(None, [i.why_matches, f"{minutes[where(i)]} min from {plan.home_station}"]))
-    return [i.model_copy(update={"why_matches": note(i)}) if where(i) in minutes else i for i in ranked]
-
 
 def build_graph(plan_fn: PlanFn, search_fn: SearchFn, commute: CommuteFn | None,
                 on_listing: Callable[[Listing], object] | None = None):

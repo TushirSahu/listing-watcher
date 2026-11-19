@@ -7,17 +7,19 @@ name = "listing-watcher"
 version = "0.1.0"
 description = "Chat with a browser agent that finds and compares listings (Mercari, SUUMO, ...)"
 requires-python = ">=3.11"
-dependencies = [
-    "browser-use==1.0.5",
-    "python-dotenv==1.2.4",
-    "starlette==1.10.0",
-    "uvicorn==0.54.0",
+dependencies = [  # the plugin server needs only these
     "httpx==0.28.1",
-    "langgraph==1.2.22",
     "mcp==2.3.0",
 ]
 
 [project.optional-dependencies]
+agent = [  # web page and terminal chat (browser agent, multi-agent graph)
+    "browser-use==1.0.5",
+    "python-dotenv==1.2.4",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+    "langgraph==1.2.22",
+]
 dev = ["pytest==9.2.0", "pytest-asyncio==1.5.0"]
 
 [project.scripts]

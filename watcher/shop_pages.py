@@ -4,11 +4,14 @@ Each parser takes the result page HTML and returns in-stock listings in page ord
 when a parser returns nothing for a query that should match, compare the page with the test snippets."""
 import asyncio
 import re
-from html import unescape
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from html import unescape
+from typing import Literal
 from urllib.parse import quote, urljoin
 
 import httpx
+from pydantic import BaseModel
 
 from watcher.models import Listing
 
@@ -181,3 +184,47 @@ async def add_branches(items: list[Listing], limit: int = 10,
         return i.model_copy(update={"branch": name or i.branch, "branch_station": address})
 
     return [fill(i) for i in items]
+
+
+# --- plan and ranking (shared by the plugin tools and the multi-agent graph) ---
+class Plan(BaseModel):
+    target: Literal["shops", "marketplaces"] = "shops"  # marketplaces (Mercari…) stay with the single agent
+    keywords: str
+    max_price: int | None = None
+    mode: Literal["ship", "pickup"] = "ship"
+    home_station: str | None = None
+    chains: list[str] = list(CHAINS)
+
+
+CommuteFn = Callable[[str, str], Awaitable[str]]
+
+_CHAIN_PREFIX = re.compile(
+    r"^(ハードオフ|オフハウス|ホビーオフ|ガレージオフ|モードオフ|ブックオフ|BOOKOFF|トレジャーファクトリー|トレファク|"
+    r"セカンドストリート|2nd STREET)(工具館|スーパーバザー)?\s*"
+)
+
+
+def branch_place(branch: str | None) -> str | None:
+    """'ハードオフ白岡店' -> '白岡': branch names usually carry the place, which is usually a station name."""
+    if not branch:
+        return None
+    place = _CHAIN_PREFIX.sub("", branch.strip()).removesuffix("店").strip()
+    return place or None
+
+
+_GRADES = {g: i for i, g in enumerate(["N", "S", "A", "B", "C", "D", "J"])}
+_MIN = re.compile(r"(\d+) min")
+
+
+async def rank(plan: Plan, items: list[Listing], commute: CommuteFn | None) -> list[Listing]:
+    """ship: cheapest first, better grade breaks ties. pickup: shortest train trip first, then price."""
+    by_price = sorted(items, key=lambda i: (i.price is None, i.price or 0, _GRADES.get((i.condition_grade or "?")[0], 9)))
+    if plan.mode != "pickup" or not plan.home_station or commute is None:
+        return by_price
+    where = lambda i: i.branch_station or branch_place(i.branch)  # note: name-based guess when no station given
+    stations = sorted({where(i) for i in items if where(i)})
+    found = await asyncio.gather(*(commute(plan.home_station, s) for s in stations))
+    minutes = {s: int(m[1]) for s, t in zip(stations, found) if (m := _MIN.search(t))}
+    ranked = sorted(by_price, key=lambda i: minutes.get(where(i), 10**6))  # stable: keeps price order
+    note = lambda i: " · ".join(filter(None, [i.why_matches, f"{minutes[where(i)]} min from {plan.home_station}"]))
+    return [i.model_copy(update={"why_matches": note(i)}) if where(i) in minutes else i for i in ranked]

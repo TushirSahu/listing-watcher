@@ -9,7 +9,7 @@ RUN useradd --create-home --uid 10001 app && mkdir /data && chown app /data
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY watcher ./watcher
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir '.[agent]'
 
 USER app
 ENV ANONYMIZED_TELEMETRY=false PYTHONUNBUFFERED=1 HOME=/home/app
