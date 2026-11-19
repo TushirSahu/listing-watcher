@@ -147,7 +147,7 @@ async def run_shop_search(request: str, plan_fn: PlanFn, search_fn: SearchFn, co
 # --- real planner and per-chain browser agents ---
 PLAN_RULES = (
     "Turn the user's shopping request into a search plan. "
-    "target='shops' when they want second-hand shop chains (2nd STREET, Hard Off, Off House, BOOKOFF, Treasure Factory, "
+    "target='shops' when they want second-hand shop chains (Hard Off, Off House, BOOKOFF, Treasure Factory, "
     "リサイクルショップ, 中古ショップ) or just a used item without naming a marketplace; target='marketplaces' when they "
     "name Mercari, Yahoo Auctions, Rakuma, Amazon or SUUMO, or want rentals. "
     "keywords: short search words as the item is sold in Japan. max_price: yen budget or null. "
@@ -192,7 +192,7 @@ def make_shop_search(llm, session_kwargs: dict):
     """Returns shop_search(text, on_listing) -> Reply | None, wiring the graph to real AI.
 
     Each chain is read with its page parser and one model call picks the real matches. The browser agent
-    only runs for chains without a parser (2nd STREET) or when the parser fails (blocked, page changed)."""
+    only runs when a parser fails (blocked, page changed)."""
     planner = PlanAgent(llm.pydantic_model(), output_type=Plan, instructions=PLAN_RULES)
     judge = PlanAgent(llm.pydantic_model(), output_type=Picks, instructions=JUDGE_RULES)
 

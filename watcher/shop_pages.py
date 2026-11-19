@@ -26,7 +26,6 @@ CHAINS = {
     "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}&exso=1", "*.hardoff.co.jp"),
     "bookoff": Chain("BOOKOFF", "https://shopping.bookoff.co.jp/search/keyword/{q}", "*.bookoff.co.jp"),
     "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?word={q}", "*.treasure-f.com"),
-    "2ndstreet": Chain("2nd STREET", "https://www.2ndstreet.jp/search?keyword={q}", "*.2ndstreet.jp"),
 }
 
 
@@ -97,7 +96,7 @@ def parse_trefac(html: str) -> list[Listing]:
     return [i for i in out if i]
 
 
-PARSERS = {"hardoff": parse_hardoff, "bookoff": parse_bookoff, "trefac": parse_trefac}  # 2nd STREET: 403 to plain HTTP
+PARSERS = {"hardoff": parse_hardoff, "bookoff": parse_bookoff, "trefac": parse_trefac}
 NO_RESULTS = {"hardoff": "該当する商品が見つかりませんでした", "bookoff": "該当する商品が見つかりませんでした",
               "trefac": "検索結果（0件）"}  # text each shop shows when nothing matches
 

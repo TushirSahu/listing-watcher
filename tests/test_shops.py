@@ -10,7 +10,7 @@ def L(url, price, grade=None, station=None, shop=None):
 
 
 def test_chains_have_search_urls_and_site_patterns():
-    assert set(CHAINS) == {"hardoff", "bookoff", "trefac", "2ndstreet"}
+    assert set(CHAINS) == {"hardoff", "bookoff", "trefac"}
     assert CHAINS["hardoff"].search_url("WH-1000XM5") == "https://netmall.hardoff.co.jp/search/?q=WH-1000XM5&exso=1"
     assert CHAINS["bookoff"].search_url("ソニー ヘッドホン").startswith("https://shopping.bookoff.co.jp/search/keyword/")
     assert all(c.site.startswith("*.") for c in CHAINS.values())
@@ -66,15 +66,15 @@ def test_graph_runs_chains_in_parallel_and_merges():
 
 def test_graph_survives_one_chain_failing():
     async def plan_fn(text):
-        return Plan(keywords="x", chains=["hardoff", "2ndstreet"])
+        return Plan(keywords="x", chains=["hardoff", "trefac"])
 
     async def search_fn(chain, p, on_listing):
-        if chain == "2ndstreet":
+        if chain == "trefac":
             raise RuntimeError("blocked")
         return [L("https://h.jp/1", 5000)]
 
     reply = asyncio.run(run_shop_search("x", plan_fn=plan_fn, search_fn=search_fn, commute=None))
-    assert len(reply.listings) == 1 and "2nd STREET" in reply.answer and "couldn't" in reply.answer
+    assert len(reply.listings) == 1 and "Treasure Factory" in reply.answer and "couldn't" in reply.answer
 
 
 def test_not_a_shop_request_returns_none():
@@ -170,9 +170,9 @@ def test_make_shop_search_error_turn_counts_as_failed(monkeypatch):
         async def close(self): pass
 
     monkeypatch.setattr(shops_mod, "ChatSession", ErrSession)
-    search = shops_mod.make_shop_search(FakeLLM({"keywords": "x", "chains": ["2ndstreet"]}), {})
+    search = shops_mod.make_shop_search(FakeLLM({"keywords": "x", "chains": ["bookoff"]}), {})
     reply = asyncio.run(search("x", lambda i: None))
-    assert reply.listings == [] and "couldn't search 2nd STREET" in reply.answer
+    assert reply.listings == [] and "couldn't search BOOKOFF" in reply.answer
 
 
 def test_marketplace_request_returns_none(monkeypatch):
@@ -243,22 +243,3 @@ def test_parser_first_judge_picks_and_no_browser(monkeypatch):
     assert "PS5本体 near 江坂, no games" in llm.judged[0] and "1. ¥4000" in llm.judged[0]   # judge sees request + numbered titles
     assert len(streamed) == 2
 
-
-def test_chain_without_parser_uses_browser(monkeypatch):
-    used = []
-
-    class Session:
-        def __init__(self, llm, **kw):
-            used.append(kw["allowed_sites"])
-        async def ask(self, text):
-            return Reply(answer="ok", listings=[])
-        async def close(self):
-            pass
-
-    async def fetch(*a):
-        raise AssertionError("2nd STREET has no parser")
-
-    monkeypatch.setattr(shops_mod, "ChatSession", Session)
-    monkeypatch.setattr(shops_mod, "fetch_shop", fetch)
-    asyncio.run(shops_mod.make_shop_search(FakeLLM({"keywords": "x", "chains": ["2ndstreet"]}), {})("x", lambda i: None))
-    assert used == [["*.2ndstreet.jp"]]
