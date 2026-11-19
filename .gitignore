@@ -9,3 +9,4 @@ watches.yaml
 *.db
 learning/
 *.pdf
+build/

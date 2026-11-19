@@ -53,6 +53,20 @@ plan ──► search each chain in parallel ──► merge ──► rank ─�
 
 Follow-up questions go to the normal single agent. Requests that name Mercari, Yahoo Auctions, Rakuma, Amazon or SUUMO skip the shop workflow.
 
+### In Claude Code (no API key)
+
+The shop search also ships as a Claude Code plugin. Claude does the thinking; the plugin's tools only read the
+shops' public search pages and train times, so no model key is needed. Requires [uv](https://docs.astral.sh/uv/).
+
+```
+/plugin marketplace add TushirSahu/listing-watcher
+/plugin install listing-watcher@listing-watcher
+```
+
+Then ask in plain words, e.g. "find a used WH-1000XM5 under ¥25,000, I'll pick it up near 吹田". Tools:
+`search_shops` (Hard Off, BOOKOFF, Treasure Factory, read without a browser) and `commute_time`.
+The first start takes a few seconds while uv installs the package.
+
 ### In the terminal
 
 ```

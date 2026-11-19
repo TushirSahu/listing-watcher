@@ -39,6 +39,7 @@ def test_commute_time_fixed_host_and_encoding():
     url = seen[0]
     assert url.host == "transit.yahoo.co.jp" and url.path == "/search/result"
     assert url.params["from"] == "吹田" and url.params["to"] == "石橋阪大前&to=evil"
+    assert url.params["shin"] == "1" and url.params["ex"] == "1"  # shinkansen allowed, or long trips read 3x too slow
 
 
 def test_commute_time_never_raises():

@@ -32,7 +32,8 @@ async def lookup_commute(from_station: str, to_station: str,
     try:
         async with httpx.AsyncClient(timeout=10, transport=transport,
                                      headers={"User-Agent": "Mozilla/5.0"}) as client:
-            resp = await client.get(TRANSIT_URL, params={"from": from_station, "to": to_station})
+            resp = await client.get(TRANSIT_URL, params={"from": from_station, "to": to_station,
+                                                           "shin": "1", "ex": "1"})  # allow shinkansen + limited express
         return parse_commute(resp.text)
     except Exception:
         return "no route found (lookup failed)"

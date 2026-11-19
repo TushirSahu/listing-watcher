@@ -1,0 +1,33 @@
+{
+  "name": "listing-watcher",
+  "version": "0.1.0",
+  "description": "Find used items at Japanese second-hand shop chains (Hard Off, BOOKOFF, Treasure Factory) and train times to their branches. No API key needed.",
+  "author": {
+    "name": "TushirSahu"
+  },
+  "repository": "https://github.com/TushirSahu/listing-watcher",
+  "keywords": [
+    "japan",
+    "second-hand",
+    "shopping",
+    "mcp"
+  ],
+  "mcpServers": {
+    "listing-watcher": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "listing-watcher-mcp"
+      ]
+    }
+  },
+  "network": {
+    "hosts": [
+      "netmall.hardoff.co.jp",
+      "shopping.bookoff.co.jp",
+      "ec.treasure-f.com",
+      "transit.yahoo.co.jp"
+    ]
+  }
+}
