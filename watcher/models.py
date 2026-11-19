@@ -12,7 +12,8 @@ class Listing(BaseModel):
     image_url: str | None = None
     shop: str | None = None              # shop chain, e.g. "Hard Off" (shop search only)
     branch: str | None = None            # branch holding the item
-    branch_station: str | None = None    # nearest station of that branch
+    branch_station: str | None = None    # where train times route to: branch's station or street address
+    branch_url: str | None = None        # branch's own page (has its address)
     condition_grade: str | None = None   # shop grade, e.g. "A", "B"
 
 

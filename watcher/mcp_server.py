@@ -7,7 +7,7 @@ import logging
 from mcp.server.mcpserver import MCPServer
 
 from watcher.listings import clean_listings
-from watcher.shop_pages import PARSERS, LayoutChanged, fetch_shop
+from watcher.shop_pages import PARSERS, LayoutChanged, add_branches, fetch_shop
 from watcher.shops import CHAINS, Plan, rank
 from watcher.tools import lookup_commute
 
@@ -29,10 +29,12 @@ async def search_shops(keywords: str, max_price: int | None = None, chains: list
     failed = [f"{CHAINS[k].name} ({'page layout changed' if isinstance(r, LayoutChanged) else 'could not load'})"
               for k, r in zip(keys, found) if isinstance(r, BaseException)]
     items = clean_listings([i for r in found if not isinstance(r, BaseException) for i in r])
+    if home_station:
+        items = await add_branches(items)
     plan = Plan(keywords=keywords, max_price=max_price, mode="pickup" if home_station else "ship",
                 home_station=home_station)
     ranked = await rank(plan, items, lookup_commute)
-    return {"results": [i.model_dump(exclude_none=True, exclude={"matches", "verified"}) for i in ranked],
+    return {"results": [i.model_dump(exclude_none=True, exclude={"matches", "verified", "branch_url"}) for i in ranked],
             "failed": failed, "note": NOTE}
 
 

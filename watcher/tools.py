@@ -1,5 +1,6 @@
 """Real tools the agent can call. They run in this process (not the agent's code sandbox), take typed
 arguments, return short text for the model, never raise, and never fetch a URL the model chose."""
+import asyncio
 import re
 from collections.abc import Callable
 
@@ -12,7 +13,7 @@ from watcher.models import Listing
 TRANSIT_URL = "https://transit.yahoo.co.jp/search/result"
 _ROUTE = re.compile(
     r'<span class="small">(?:(\d+)時間)?(\d+)分</span></li>\s*<li class="fare">(?:<span class="mark">)?([\d,]+)<!-- -->円(?:</span>)?</li>'
-    r'\s*<li class="transfer">乗換：<span class="mark">(\d+)'
+    r'\s*<li class="transfer">乗換：(?:<!-- -->|<span class="mark">)*(\d+)'
 )
 
 
@@ -26,17 +27,27 @@ def parse_commute(html: str) -> str:
     return f"{minutes} min, {change}, ¥{fare}"
 
 
+_ROUTES: dict[tuple[str, str], str] = {}  # (from, to) -> found route; note: per process, never expires
+_GENTLE = asyncio.Semaphore(2)  # the site stops answering when hit with bursts
+
+
 async def lookup_commute(from_station: str, to_station: str,
                        transport: httpx.AsyncBaseTransport | None = None) -> str:
-    """Train time between two stations in Japan. Fixed host; station names are only query parameters."""
+    """Train time between two places in Japan (station names or street addresses). Fixed host; the places are only
+    query parameters. Found routes are cached; failures are not, so they are retried next time."""
+    if (from_station, to_station) in _ROUTES:
+        return _ROUTES[from_station, to_station]
     try:
-        async with httpx.AsyncClient(timeout=10, transport=transport,
-                                     headers={"User-Agent": "Mozilla/5.0"}) as client:
+        async with _GENTLE, httpx.AsyncClient(timeout=10, transport=transport,
+                                              headers={"User-Agent": "Mozilla/5.0"}) as client:
             resp = await client.get(TRANSIT_URL, params={"from": from_station, "to": to_station,
                                                            "shin": "1", "ex": "1"})  # allow shinkansen + limited express
-        return parse_commute(resp.text)
+        route = parse_commute(resp.text)
     except Exception:
         return "no route found (lookup failed)"
+    if route != "no route found":
+        _ROUTES[from_station, to_station] = route
+    return route
 
 
 def make_tools(on_listing: Callable[[Listing], int | None] | None = None) -> Tools:

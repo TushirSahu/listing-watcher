@@ -90,3 +90,54 @@ def test_all_out_of_stock_is_empty_not_layout_change():
     sold_out = BOOKOFF.split("<div", 2)[0] + "<div" + BOOKOFF.split("<div", 2)[2]  # only the 在庫なし block
     page = httpx.MockTransport(lambda r: httpx.Response(200, text=sold_out))
     assert asyncio.run(fetch_shop("bookoff", "x", None, page)) == []
+
+
+# --- pick-up: branch and address from item / branch pages ---
+from watcher.models import Listing
+from watcher.shop_pages import add_branches, parse_hardoff_item, parse_trefac_shop
+
+HARDOFF_ITEM = '''<script type="application/ld+json">{"offers":{"seller":{"@type":"Organization",
+"url":"https://netmall.hardoff.co.jp/shop/201441/","name":"ハードオフ仙台八幡店"}}}</script>
+<p class="product-detail-store__address">〒980-0871宮城県仙台市青葉区八幡3-1-50 レキシントンプラザ八幡2F</p>'''
+TREFAC_SHOP = '''<th>住所</th> <td class="clearfix"> <p class="add_area"> 〒343-0032<br>埼玉県越谷市袋山1852-1 </p>'''
+
+
+def test_branch_page_parsers():
+    assert parse_hardoff_item(HARDOFF_ITEM) == ("ハードオフ仙台八幡店", "宮城県仙台市青葉区八幡3-1-50")
+    assert parse_trefac_shop(TREFAC_SHOP) == "埼玉県越谷市袋山1852-1"
+    assert parse_hardoff_item("<html></html>") == (None, None)
+
+
+def test_trefac_result_links_its_branch_page():
+    [i] = PARSERS["trefac"](TREFAC)
+    assert i.branch_url == "https://www.treasure-f.com/shop/34/"
+
+
+def test_add_branches_fills_address_cheapest_first_and_skips_failures():
+    seen = []
+
+    def handler(req):
+        seen.append(str(req.url))
+        if "6000" in str(req.url):
+            return httpx.Response(500)
+        return httpx.Response(200, text=TREFAC_SHOP if "treasure-f" in str(req.url) else HARDOFF_ITEM)
+
+    def item(url, price, shop, **kw):
+        return Listing(url=url, title="x", price=price, why_matches="", matches=True, verified=False, shop=shop, **kw)
+
+    items = [item("https://netmall.hardoff.co.jp/product/9000/", 9000, "Hard Off"),
+             item("https://netmall.hardoff.co.jp/product/1000/", 1000, "Hard Off"),
+             item("https://netmall.hardoff.co.jp/product/6000/", 6000, "Hard Off"),
+             item("https://ec.treasure-f.com/item/1", 500, "Treasure Factory", branch="北越谷店",
+                  branch_url="https://www.treasure-f.com/shop/34/"),
+             item("https://ec.treasure-f.com/item/2", 700, "Treasure Factory", branch="北越谷店",
+                  branch_url="https://www.treasure-f.com/shop/34/"),
+             item("https://shopping.bookoff.co.jp/used/1", 100, "BOOKOFF")]
+    out = asyncio.run(add_branches(items, limit=2, transport=httpx.MockTransport(handler)))
+    assert [i.url for i in out] == [i.url for i in items]                      # order kept
+    assert out[1].branch == "ハードオフ仙台八幡店" and out[1].branch_station == "宮城県仙台市青葉区八幡3-1-50"
+    assert out[2].branch_station is None                                        # its page failed
+    assert out[0].branch_station is None                                        # beyond limit (2 cheapest)
+    assert out[3].branch_station == out[4].branch_station == "埼玉県越谷市袋山1852-1"
+    assert seen.count("https://www.treasure-f.com/shop/34/") == 1              # one fetch per branch
+    assert not any("bookoff" in u for u in seen)

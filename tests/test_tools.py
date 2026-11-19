@@ -93,3 +93,26 @@ def test_parse_commute_highlighted_fare():
     page = ('<span class="small">25分</span></li><li class="fare"><span class="mark">370<!-- -->円</span></li>'
             '<li class="transfer">乗換：<span class="mark">1<!-- -->回</span></li>')
     assert parse_commute(page) == "25 min, 1 transfer, ¥370"
+
+
+def test_parse_commute_plain_transfer_count():
+    # transfer count not highlighted (seen on routes to a street address)
+    html = ('<li class="time">11:37<!-- -->→<span class="mark">15:49</span><span class="small">4時間12分</span></li>'
+            '<li class="fare">14,593<!-- -->円</li><li class="transfer">乗換：<!-- -->3<!-- -->回</li>')
+    assert parse_commute(html) == "252 min, 3 transfers, ¥14,593"
+
+
+def test_lookup_commute_caches_found_routes_only():
+    calls = []
+    route = ('<span class="small">22分</span></li><li class="fare">370<!-- -->円</li>'
+             '<li class="transfer">乗換：<span class="mark">1</span>回</li>')
+
+    def handler(req):
+        calls.append(req.url.params["to"])
+        return httpx.Response(200, text=route if req.url.params["to"] == "江坂" else "<html></html>")
+
+    t = httpx.MockTransport(handler)
+    for _ in range(2):
+        assert asyncio.run(lookup_commute("吹田", "江坂", transport=t)) == "22 min, 1 transfer, ¥370"
+        assert asyncio.run(lookup_commute("吹田", "nowhere", transport=t)) == "no route found"
+    assert calls == ["江坂", "nowhere", "nowhere"]   # found route cached, failure retried
