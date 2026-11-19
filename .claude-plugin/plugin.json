@@ -6,6 +6,8 @@
     "name": "TushirSahu"
   },
   "repository": "https://github.com/TushirSahu/listing-watcher",
+  "license": "MIT",
+  "icon": ".claude-plugin/icon.png",
   "keywords": [
     "japan",
     "second-hand",
@@ -19,7 +21,10 @@
         "--from",
         "${CLAUDE_PLUGIN_ROOT}",
         "listing-watcher-mcp"
-      ]
+      ],
+      "env": {
+        "CACHE_DB": "${CLAUDE_PLUGIN_DATA}/cache.db"
+      }
     }
   },
   "network": {

@@ -48,10 +48,57 @@ def reader(*lines, end=EOFError):
     return read
 
 
-async def run(*lines, end=EOFError):
+async def run(*lines, end=EOFError, shop_search=None):
     s, out = FakeSession(), []
-    await chat_loop(s, reader(*lines, end=end), out.append)
+    await chat_loop(s, reader(*lines, end=end), out.append, shop_search)
     return s, out
+
+
+def fake_shop(reply):
+    calls = []
+
+    async def shop_search(text, on_listing):
+        calls.append(text)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    return shop_search, calls
+
+
+async def test_first_search_goes_to_shops():
+    shop, calls = fake_shop(Reply(answer="shops found", listings=[L(1, 500, "bento")]))
+    s, out = await run("cheap bento", shop_search=shop)
+    assert calls == ["cheap bento"] and s.asked == []
+    assert out == [render(Reply(answer="shops found", listings=[L(1, 500, "bento")]))]
+
+
+async def test_shop_none_falls_back_to_agent():
+    shop, calls = fake_shop(None)
+    s, out = await run("mercari xm5", shop_search=shop)
+    assert calls == ["mercari xm5"] and s.asked == ["mercari xm5"] and "ok mercari xm5" in out
+
+
+async def test_shop_error_falls_back_to_agent():
+    shop, _ = fake_shop(RuntimeError("boom"))
+    s, out = await run("cheap bento", shop_search=shop)
+    assert s.asked == ["cheap bento"] and "ok cheap bento" in out
+
+
+async def test_follow_up_after_shops_gets_recap():
+    shop, calls = fake_shop(Reply(answer="shops found", listings=[L(1, 500, "bento")]))
+    s, _ = await run("cheap bento", "only under 400", "and nearby", shop_search=shop)
+    assert calls == ["cheap bento"]
+    first, second = s.asked
+    assert "Earlier in this conversation" in first and "bento" in first and "https://x.jp/1" in first
+    assert first.endswith("New message: only under 400")
+    assert second == "and nearby"  # the agent saw the recap once and keeps its own context after
+
+
+async def test_new_lets_next_search_use_shops():
+    shop, calls = fake_shop(Reply(answer="shops found", listings=[L(1, 500, "bento")]))
+    s, _ = await run("cheap bento", "/new", "cheap ramen", "spicier", shop_search=shop)
+    assert calls == ["cheap bento", "cheap ramen"]
+    assert len(s.asked) == 1 and "User: cheap ramen" in s.asked[0] and "cheap bento" not in s.asked[0]
 
 
 async def test_loop_asks_and_prints():
@@ -115,12 +162,13 @@ def test_main_runs_loop_with_cap(monkeypatch, tmp_path):
          LLM_MAX_CONTEXT_CHARS="60000")
     seen = {}
 
-    async def fake_loop(session, read, write):
+    async def fake_loop(session, read, write, shop_search=None):
         seen["cap"], seen["headless"] = session.max_context_chars, session.headless
+        seen["shop"] = shop_search is not None
 
     monkeypatch.setattr(cli, "chat_loop", fake_loop)
     assert main(["chat", "--show-browser"]) == 0
-    assert seen == {"cap": 60000, "headless": False}
+    assert seen == {"cap": 60000, "headless": False, "shop": True}
 
 
 def test_web_serves_on_localhost(monkeypatch, tmp_path):
@@ -136,7 +184,7 @@ def _session_from(monkeypatch, tmp_path, **env):
     _env(monkeypatch, tmp_path, LLM_PROVIDER="anthropic", LLM_MODEL="m", ANTHROPIC_API_KEY="k", **env)
     seen = {}
 
-    async def fake_loop(session, read, write):
+    async def fake_loop(session, read, write, shop_search=None):
         seen["s"] = session
 
     monkeypatch.setattr(cli, "chat_loop", fake_loop)

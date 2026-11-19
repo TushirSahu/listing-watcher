@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from watcher import cache
 from watcher.listings import clean_listings
 from watcher.models import Listing
 
@@ -30,16 +31,15 @@ def parse_commute(html: str) -> str:
     return f"{minutes} min, {change}, ¥{fare}"
 
 
-_ROUTES: dict[tuple[str, str], str] = {}  # (from, to) -> found route; note: per process, never expires
 _GENTLE = asyncio.Semaphore(2)  # the site stops answering when hit with bursts
 
 
 async def lookup_commute(from_station: str, to_station: str,
                        transport: httpx.AsyncBaseTransport | None = None) -> str:
     """Train time between two places in Japan (station names or street addresses). Fixed host; the places are only
-    query parameters. Found routes are cached; failures are not, so they are retried next time."""
-    if (from_station, to_station) in _ROUTES:
-        return _ROUTES[from_station, to_station]
+    query parameters. Found routes are cached on disk for 30 days; failures are not, so they are retried next time."""
+    if found := cache.get("route", [from_station, to_station]):
+        return found
     try:
         async with _GENTLE, httpx.AsyncClient(timeout=10, transport=transport,
                                               headers={"User-Agent": "Mozilla/5.0"}) as client:
@@ -49,7 +49,7 @@ async def lookup_commute(from_station: str, to_station: str,
     except Exception:
         return "no route found (lookup failed)"
     if route != "no route found":
-        _ROUTES[from_station, to_station] = route
+        cache.put("route", [from_station, to_station], route)
     return route
 
 

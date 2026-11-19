@@ -13,6 +13,7 @@ from urllib.parse import quote, urljoin
 import httpx
 from pydantic import BaseModel
 
+from watcher import cache
 from watcher.models import Listing
 
 @dataclass(frozen=True)
@@ -145,10 +146,6 @@ def parse_trefac_shop(html: str) -> str | None:
     return _address(_find(r'class="add_area">(.*?)</p>', html))
 
 
-_PLACES: dict[str, tuple[str | None, str | None]] = {}  # page url -> (branch, address)
-# note: per-process cache, lost on restart; persist to SQLite if repeat sessions feel slow
-
-
 async def add_branches(items: list[Listing], limit: int = 10,
                        transport: httpx.AsyncBaseTransport | None = None) -> list[Listing]:
     """Pick-up mode: fill branch and branch_station (its address) for each shop's `limit` cheapest items,
@@ -163,8 +160,11 @@ async def add_branches(items: list[Listing], limit: int = 10,
         todo += list(dict.fromkeys(page(i) for i in cheapest))[:limit]
     limit_host = asyncio.Semaphore(3)
 
+    places: dict[str, tuple[str | None, str | None]] = {}  # page url -> (branch, address); on disk for 30 days
+
     async def fetch(client: httpx.AsyncClient, url: str):
-        if url in _PLACES:
+        if found := cache.get("place", url):
+            places[url] = tuple(found)
             return
         async with limit_host:
             try:
@@ -172,13 +172,14 @@ async def add_branches(items: list[Listing], limit: int = 10,
                 resp.raise_for_status()
             except httpx.HTTPError:
                 return  # not cached: try again next search
-        _PLACES[url] = parse_hardoff_item(resp.text) if "hardoff" in url else (None, parse_trefac_shop(resp.text))
+        places[url] = parse_hardoff_item(resp.text) if "hardoff" in url else (None, parse_trefac_shop(resp.text))
+        cache.put("place", url, places[url])
 
     async with httpx.AsyncClient(timeout=20, transport=transport, headers={"User-Agent": UA}) as client:
         await asyncio.gather(*(fetch(client, u) for u in todo))
 
     def fill(i: Listing) -> Listing:
-        name, address = _PLACES.get(page(i) or "", (None, None))
+        name, address = places.get(page(i) or "", (None, None))
         if not address:
             return i
         return i.model_copy(update={"branch": name or i.branch, "branch_station": address})

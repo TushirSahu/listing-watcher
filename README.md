@@ -1,7 +1,5 @@
 # listing-watcher
 
-[![test](https://github.com/TushirSahu/listing-watcher/actions/workflows/test.yml/badge.svg)](https://github.com/TushirSahu/listing-watcher/actions/workflows/test.yml)
-
 A Claude Code plugin that finds used items in Japanese second-hand shops (Hard Off, BOOKOFF, Treasure Factory)
 and tells you how long the train ride to each branch takes. No API key: Claude does the thinking, the plugin
 only reads the shops' public search pages.
@@ -44,7 +42,7 @@ you ─► Claude ─► search_shops ─► shop search pages (plain HTTP, no b
 
 - **No AI inside the plugin.** The tools fetch and parse pages; Claude plans, judges and explains. It uses your Claude plan, not a separate model key.
 - **Honest failures.** A shop that can't be loaded or whose page layout changed is reported as such, not as "no results".
-- **Gentle on the sites.** A few requests per search, at most 2 train-time lookups at once, found routes cached.
+- **Gentle on the sites.** A few requests per search, at most 2 train-time lookups at once. Branch addresses and train routes are cached on disk for 30 days.
 
 ## Safety
 
@@ -124,7 +122,8 @@ listing-watcher chat --show-browser   # watch the agent work
 
 - Ask for anything listed on a site: used items, new items, rentals. Name a site ("on Mercari") or let the agent pick (Mercari / Yahoo Auctions / Rakuma for used goods, Amazon.co.jp for new, SUUMO for rentals).
 - Follow up in plain words: "only ones with the case", "check #2's photos", "now try Rakuma", "which is the best deal?".
-- `/new` starts a fresh search (new browser, no memory). `/quit` or Ctrl+D exits.
+- The first search goes to the shop search (Hard Off, BOOKOFF, Treasure Factory), like the web page. Requests for Mercari, SUUMO and the other sites, or a shop search that fails, go to the browser agent. Follow-ups go to the browser agent with a short recap of the results so far.
+- `/new` starts a fresh search (new browser, no memory; the next search uses the shop search again). `/quit` or Ctrl+D exits.
 
 How results are kept honest:
 
@@ -166,6 +165,10 @@ Every agent step is one model call, and a request usually takes 10–40 steps. A
 ## Be a good citizen
 
 This tool is for personal use. You are responsible for following each site's terms.
+
+## License
+
+[MIT](LICENSE)
 
 ## Development
 

@@ -10,6 +10,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 from watcher.agent import DEFAULT_SITES, ChatSession, ConfigError, make_llm
+from watcher.history import recap
 from watcher.listings import clean_listings
 from watcher.models import Reply
 
@@ -24,7 +25,9 @@ def render(reply: Reply) -> str:
     return "\n".join(lines)
 
 
-async def chat_loop(session, read: Callable[[], Awaitable[str]], write: Callable[[str], None]) -> None:
+async def chat_loop(session, read: Callable[[], Awaitable[str]], write: Callable[[str], None],
+                    shop_search=None) -> None:
+    found, unseen = False, []  # unseen: shop turns the single agent hasn't been told about yet
     try:
         while True:
             text = (await read()).strip()
@@ -34,9 +37,24 @@ async def chat_loop(session, read: Callable[[], Awaitable[str]], write: Callable
                 break
             if text == "/new":
                 await session.close()
+                found, unseen = False, []
                 write("started a new search")
                 continue
-            write(render(await session.ask(text)))
+            reply = None
+            if shop_search and not found:  # same routing as the web page; None = not a shop request
+                try:
+                    reply = await shop_search(text, None)
+                except Exception as e:
+                    write(f"shop search failed ({type(e).__name__}: {e}), asking the browser agent")
+            if reply is not None:
+                listings = [i.model_dump() for i in clean_listings(reply.listings)]
+                unseen += [{"role": "you", "text": text, "listings": []},
+                           {"role": "agent", "text": reply.answer, "listings": listings}]
+            else:
+                reply = await session.ask(f"{recap(unseen)}\n\nNew message: {text}" if unseen else text)
+                unseen = []
+            found = found or bool(clean_listings(reply.listings))
+            write(render(reply))
     except (EOFError, KeyboardInterrupt):
         pass
     finally:
@@ -91,16 +109,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"config error: {e}", file=sys.stderr)
         return 2
 
+    from watcher.shops import make_shop_search
+
+    shop_search = make_shop_search(session.llm, {
+        "headless": session.headless, "max_context_chars": session.max_context_chars,
+        "injection_check": session.injection_check, "step_budget": session.step_budget})
     if args.cmd == "web":
         from watcher.history import DEFAULT_PATH, History
-        from watcher.shops import make_shop_search
         from watcher.web import create_app
 
         print(f"open http://localhost:{args.port}  (Ctrl+C to stop)")
         history = History(os.environ.get("HISTORY_DB") or DEFAULT_PATH)
-        shop_search = make_shop_search(session.llm, {
-            "headless": session.headless, "max_context_chars": session.max_context_chars,
-            "injection_check": session.injection_check, "step_budget": session.step_budget})
         uvicorn.run(create_app(session, history, shop_search), host=args.host, port=args.port, log_level="warning")
         return 0
     print(HELP)
@@ -109,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return await asyncio.to_thread(input, "\nyou> ")
 
     try:
-        asyncio.run(chat_loop(session, read, lambda text: print(f"agent> {text}")))
+        asyncio.run(chat_loop(session, read, lambda text: print(f"agent> {text}"), shop_search))
     except KeyboardInterrupt:
         pass
     return 0

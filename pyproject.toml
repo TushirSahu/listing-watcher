@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,7 @@ name = "listing-watcher"
 version = "0.1.0"
 description = "Chat with a browser agent that finds and compares listings (Mercari, SUUMO, ...)"
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = [  # the plugin server needs only these
     "httpx==0.28.1",
     "mcp==2.3.0",
