@@ -11,7 +11,7 @@ def L(url, price, grade=None, station=None, shop=None):
 
 def test_chains_have_search_urls_and_site_patterns():
     assert set(CHAINS) == {"hardoff", "bookoff", "trefac", "2ndstreet"}
-    assert CHAINS["hardoff"].search_url("WH-1000XM5") == "https://netmall.hardoff.co.jp/search/?q=WH-1000XM5"
+    assert CHAINS["hardoff"].search_url("WH-1000XM5") == "https://netmall.hardoff.co.jp/search/?q=WH-1000XM5&exso=1"
     assert CHAINS["bookoff"].search_url("ソニー ヘッドホン").startswith("https://shopping.bookoff.co.jp/search/keyword/")
     assert all(c.site.startswith("*.") for c in CHAINS.values())
 
@@ -138,7 +138,7 @@ def test_make_shop_search_plans_and_searches(monkeypatch):
     assert {s.kw["allowed_sites"][0] for s in sessions} == {"*.hardoff.co.jp", "*.bookoff.co.jp"}
     hard = next(s for s in sessions if s.kw["allowed_sites"] == ["*.hardoff.co.jp"])
     task = hard.asked[0]
-    assert "https://netmall.hardoff.co.jp/search/?q=WH-1000XM5" in task and "¥25,000" in task
+    assert "https://netmall.hardoff.co.jp/search/?q=WH-1000XM5&exso=1" in task and "¥25,000" in task
     assert "branch_station" in task and "condition_grade" in task
     assert all(s.closed == 1 for s in sessions)
     assert len(reply.listings) == 2 and "12 min from 吹田" in reply.listings[0].why_matches

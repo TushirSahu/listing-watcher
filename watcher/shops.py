@@ -37,9 +37,9 @@ class Chain:
 
 
 CHAINS = {
-    "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}", "*.hardoff.co.jp"),
+    "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}&exso=1", "*.hardoff.co.jp"),
     "bookoff": Chain("BOOKOFF", "https://shopping.bookoff.co.jp/search/keyword/{q}", "*.bookoff.co.jp"),
-    "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?keyword={q}", "*.treasure-f.com"),
+    "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?word={q}", "*.treasure-f.com"),
     "2ndstreet": Chain("2nd STREET", "https://www.2ndstreet.jp/search?keyword={q}", "*.2ndstreet.jp"),
 }
 
@@ -93,9 +93,8 @@ async def rank(plan: Plan, items: list[Listing], commute: CommuteFn | None) -> l
     found = await asyncio.gather(*(commute(plan.home_station, s) for s in stations))
     minutes = {s: int(m[1]) for s, t in zip(stations, found) if (m := _MIN.search(t))}
     ranked = sorted(by_price, key=lambda i: minutes.get(where(i), 10**6))  # stable: keeps price order
-    return [i.model_copy(update={"why_matches": f"{i.why_matches} · {minutes[where(i)]} min from "
-                                                f"{plan.home_station}"}) if where(i) in minutes else i
-            for i in ranked]
+    note = lambda i: " · ".join(filter(None, [i.why_matches, f"{minutes[where(i)]} min from {plan.home_station}"]))
+    return [i.model_copy(update={"why_matches": note(i)}) if where(i) in minutes else i for i in ranked]
 
 
 def build_graph(plan_fn: PlanFn, search_fn: SearchFn, commute: CommuteFn | None,
