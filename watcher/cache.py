@@ -18,12 +18,12 @@ def _db() -> sqlite3.Connection:
     return db
 
 
-def get(kind: str, key):
-    """The stored value (JSON-decoded), or None when missing, older than MAX_AGE, or the cache can't be read."""
+def get(kind: str, key, max_age: float = MAX_AGE):
+    """The stored value (JSON-decoded), or None when missing, older than max_age seconds, or the cache can't be read."""
     try:
         with closing(_db()) as db:
             row = db.execute("SELECT value FROM cache WHERE kind = ? AND key = ? AND saved > ?",
-                             (kind, json.dumps(key), time.time() - MAX_AGE)).fetchone()
+                             (kind, json.dumps(key), time.time() - max_age)).fetchone()
     except (sqlite3.Error, OSError):
         return None
     return json.loads(row[0]) if row else None

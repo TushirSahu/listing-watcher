@@ -25,3 +25,9 @@ async def test_shop_no_results_page_is_empty(key):
 
 async def test_train_times_still_parse():
     assert "min" in await lookup_commute("吹田", "江坂")
+
+
+async def test_market_price_still_parses():
+    from watcher import market
+    m = await market.market_price("WH-1000XM5")
+    assert m and m["count"] >= 3 and 5000 < m["median"] < 60000

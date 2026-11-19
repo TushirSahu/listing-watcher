@@ -1,9 +1,17 @@
 import httpx
+import pytest
 
 import watcher.mcp_server as srv
 from watcher.models import Listing
 from watcher.shop_pages import LayoutChanged
 
+
+
+@pytest.fixture(autouse=True)
+def no_market(monkeypatch):  # no real Yahoo calls in unit tests
+    async def none(keywords):
+        return None
+    monkeypatch.setattr(srv.market, "market_price", none)
 
 def L(url, price, branch=None):
     return Listing(url=url, title=f"item {price}", price=price, why_matches="", matches=True, verified=False,
@@ -46,4 +54,18 @@ async def test_search_shops_pickup_adds_train_time(monkeypatch):
 
 async def test_tools_are_registered():
     names = {t.name for t in await srv.server.list_tools()}
-    assert names == {"search_shops", "commute_time"}
+    assert names == {"search_shops", "commute_time", "market_price"}
+
+
+async def test_search_shops_compares_with_market(monkeypatch):
+    async def fetch(key, keywords, max_price):
+        return [L("https://h.jp/1", 19800), L("https://h.jp/2", 15300)]
+
+    async def typical(keywords):
+        return {"median": 17000, "low": 16000, "high": 18000, "count": 9, "since": "2026-10-20", "source": "x"}
+
+    monkeypatch.setattr(srv, "fetch_shop", fetch)
+    monkeypatch.setattr(srv.market, "market_price", typical)
+    out = await srv.search_shops("WH-1000XM5", chains=["hardoff"])
+    assert out["market"]["median"] == 17000
+    assert [r["vs_market_pct"] for r in out["results"]] == [-10, 16]

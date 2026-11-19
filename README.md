@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>Find used gear in Japan's second-hand shops, right inside Claude Code.</b><br>
-  Hard Off · BOOKOFF · Treasure Factory · train times to each store · no API key
+  Hard Off · BOOKOFF · Treasure Factory · deal check vs recent sales · train times · English-friendly · no API key
 </p>
 
 <p align="center">
@@ -19,8 +19,9 @@
 
 Thrift Scout is a [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin. Ask for something used in plain
 words and Claude searches Japan's big second-hand chains, drops what doesn't fit (wrong model, games instead of the
-console, ジャンク), and answers with a short list: price, shop and branch, condition grade, and how long the train ride
-to that store takes from where you are.
+console, ジャンク), and answers with a short list: price, shop and branch, condition grade, **whether the price is a
+good deal compared with what the same model recently sold for**, and how long the train ride to that store takes from
+where you are. Ask in English and the Japanese listings come back translated and explained.
 
 ## Install
 
@@ -38,23 +39,26 @@ downloads about 80 MB and takes a few seconds; later starts are instant.
 
 ```
 find a used WH-1000XM5 under ¥25,000, I'll pick it up near 吹田
+I don't read Japanese: is there a used Switch OLED under ¥30,000? Which is the best deal?
+what does a used iPad Air 4 usually sell for in Japan?
 PS5 console (not games) under 50,000 yen, shipped
-cheapest Kindle at BOOKOFF or Treasure Factory
 how long by train from 梅田 to 江坂?
 ```
 
 A typical answer:
 
-> I found 3 used WH-1000XM5 under ¥25,000, closest first:
-> 1. **¥19,800** · Hard Off 江坂店 · grade B · 8 min from 吹田
-> 2. **¥22,000** · Hard Off 豊中店 · grade B · 15 min
-> 3. **¥16,500** · Treasure Factory 北越谷店 · about 4 h (Saitama), better shipped
+> Typical used price: **¥16,750** (40 recent auction sales). Closest first:
+> 1. **¥15,300** · Hard Off Esaka (江坂店) · grade B (everyday use, few marks) · 8 min from 吹田 · **fair** (9% below)
+> 2. **¥19,800** · Hard Off Toyonaka (豊中店) · grade A (lightly used, excellent) · 15 min · **above market** (+18%)
+> 3. **¥16,500** · Treasure Factory Kita-Koshigaya (北越谷店) · 小キズ有 (minor scratches) · about 4 h, better shipped · **fair**
 >
-> I left out a WH-1000XM4 (older model) and a ジャンク listing. Each item comes with its shop link.
+> Skipped: one WH-1000XM4 (older model) and one ジャンク (junk, sold as-is) listing. Each item comes with its shop link.
 
 ## Features
 
 - **Three chains at once:** Hard Off (オフモール), BOOKOFF and Treasure Factory (トレファク), in stock and within your budget.
+- **Is it a good deal?** Every search is compared with what the same model actually sold for on Yahoo! Auctions recently (median of used sales, junk and accessories left out), and each match is labelled good deal, fair or above market.
+- **English-friendly:** ask in English and titles are translated, condition words (ジャンク, 動作未確認, 美品, 本体のみ…) and Hard Off's grade letters are explained.
 - **Pick-up or shipping:** give a home station and results are sorted by train time to each branch's address (Yahoo!乗換案内); otherwise by price, then condition grade.
 - **No API key:** the plugin has no AI inside. Claude does the thinking; the tools only read public search pages. It runs on your Claude plan.
 - **Honest:** a shop that can't be loaded, or whose page layout changed, is reported as such instead of looking like "no results".
@@ -67,6 +71,7 @@ flowchart LR
     you([You]) --> claude[Claude]
     claude -- search_shops --> shops[Hard Off · BOOKOFF · Treasure Factory<br/>search pages]
     shops --> claude
+    claude -. same search .-> sold[Yahoo! Auctions<br/>recent sales → median] --> claude
     claude -. pick-up .-> branch[Item / branch page<br/>→ address] --> train[Yahoo!乗換案内<br/>train time]
     train --> claude
     claude --> answer([Short, ranked answer])
@@ -75,6 +80,7 @@ flowchart LR
 | Part | What it does |
 |---|---|
 | `search_shops` tool | In-stock items from the three chains within your budget. With `home_station`, finds each item's branch and sorts by train time. |
+| `market_price` tool | Typical used price from recent Yahoo! Auctions sales: median, middle-half range, number of sales. Also added to every `search_shops` result. |
 | `commute_time` tool | Fastest train route between two stations or addresses. |
 | `find-listings` skill | Tells Claude how to turn a request into keywords, pick real matches and present them. |
 
@@ -88,14 +94,18 @@ flowchart LR
 
 **Do I need an API key?** No. Claude is the model; the plugin only fetches pages.
 
-**Why not Mercari, Yahoo Auctions or 2nd STREET?** Those pages need a real browser (or block automated requests). The
+**How is "good deal" decided?** The median of recent used sales of the same model on Yahoo! Auctions (new, poor
+condition, junk and accessory-only listings left out), cached for a day. 10% or more below it is a good deal, within
+10% is fair. It's a reference: a better condition grade can justify a higher price.
+
+**Why doesn't it list items from Mercari, Yahoo Auctions or 2nd STREET?** Those pages need a real browser (or block automated requests). The
 [standalone app](#standalone-app) covers Mercari and the other marketplaces with a browser agent.
 
 **Why are some train times missing?** BOOKOFF's online items ship from a warehouse, so they have no branch. For Hard Off
 and Treasure Factory the 10 cheapest items per shop get a branch lookup.
 
 **Is it allowed?** It reads the same public search pages you would, a few requests at a time, for personal use. You are
-responsible for following each site's terms. Not affiliated with Hard Off, BOOKOFF, Treasure Factory or LY Corporation.
+responsible for following each site's terms. Not affiliated with Hard Off, BOOKOFF, Treasure Factory, Yahoo! JAPAN or LY Corporation.
 
 ## Standalone app
 
@@ -228,11 +238,11 @@ claude plugin validate .
 
 **Plugin evals.** `evals/<case>/` holds end-to-end cases for Claude Code. The shop tools are replaced by fixed answers
 (`mocks/`), and graders check that Claude calls `search_shops`, leaves out wrong models, games and ジャンク, says when a
-shop couldn't be searched, and never passes on instructions hidden in a listing title. Run them from a fresh clone (the
+shop couldn't be searched, labels deals correctly in English, and never passes on instructions hidden in a listing title. Run them from a fresh clone (the
 runner refuses folders with a large `.venv`); each run uses your Claude plan:
 
 ```bash
-claude plugin eval . --runs 1 --ablation none   # about $0.35 for the 4 cases
+claude plugin eval . --runs 1 --ablation none   # about $0.55 for the 5 cases
 ```
 
 ## License

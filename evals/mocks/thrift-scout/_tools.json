@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "search_shops",
-      "description": "Search Japanese second-hand shop chains (Hard Off, BOOKOFF, Treasure Factory) for used items.\n\n    keywords: short search words as sold in Japan, e.g. 'WH-1000XM5'. max_price: yen budget.\n    chains: any of hardoff, bookoff, trefac (default all). home_station: Japanese station name for\n    in-store pick-up; results are then sorted by train time to each branch (when known), else by price.",
+      "description": "Search Japanese second-hand shop chains (Hard Off, BOOKOFF, Treasure Factory) for used items.\n\nkeywords: short search words as sold in Japan, e.g. 'WH-1000XM5'. max_price: yen budget.\nchains: any of hardoff, bookoff, trefac (default all). home_station: Japanese station name for\nin-store pick-up; results are then sorted by train time to each branch (when known), else by price.",
       "inputSchema": {
         "properties": {
           "keywords": {
@@ -53,6 +53,44 @@
           "keywords"
         ],
         "title": "search_shopsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "market_price",
+      "description": "Typical used price in Japan from recent Yahoo! Auctions sales: median, middle-half range (low-high), number of\nsales and the oldest sale date. None when there are too few sales. keywords: model name, e.g. 'WH-1000XM5'.",
+      "inputSchema": {
+        "properties": {
+          "keywords": {
+            "title": "Keywords",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keywords"
+        ],
+        "title": "market_priceArguments",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "market_priceOutput",
         "type": "object"
       }
     },
