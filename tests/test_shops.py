@@ -93,21 +93,38 @@ def test_build_graph_compiles():
 
 
 # --- real planner / per-chain search wiring (no network: pydantic-ai TestModel, fake ChatSession) ---
-from pydantic_ai.models.test import TestModel
+import json
+
+from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 import watcher.shops as shops_mod
 from watcher.models import Reply
 
 
 class FakeLLM:
-    def __init__(self, plan_args):
-        self.plan_args = plan_args
+    """Planner returns plan_args; the judge returns picks (list of {n, why}) and records what it was shown."""
+    def __init__(self, plan_args, picks=()):
+        self.plan_args, self.picks, self.judged = plan_args, list(picks), []
 
     def pydantic_model(self):
-        return TestModel(custom_output_args=self.plan_args, call_tools=[])
+        def reply(messages, info: AgentInfo):
+            tool = info.output_tools[0]
+            if "keywords" in json.dumps(tool.parameters_json_schema):
+                return ModelResponse(parts=[ToolCallPart(tool.name, self.plan_args)])
+            self.judged.append(messages[-1].parts[-1].content)
+            return ModelResponse(parts=[ToolCallPart(tool.name, {"picks": self.picks})])
+        return FunctionModel(reply)
 
 
-def test_make_shop_search_plans_and_searches(monkeypatch):
+def no_parser(monkeypatch):
+    async def fail(*a, **k):
+        raise RuntimeError("page changed")
+    monkeypatch.setattr(shops_mod, "fetch_shop", fail)
+
+
+def test_make_shop_search_falls_back_to_browser(monkeypatch):
+    no_parser(monkeypatch)
     sessions = []
 
     class FakeSession:
@@ -146,6 +163,7 @@ def test_make_shop_search_plans_and_searches(monkeypatch):
 
 
 def test_make_shop_search_error_turn_counts_as_failed(monkeypatch):
+    no_parser(monkeypatch)
     class ErrSession:
         def __init__(self, llm, **kw): pass
         async def ask(self, text): return Reply(answer="error: blocked")
@@ -195,3 +213,52 @@ def test_answer_does_not_claim_train_time_when_none_found():
 
     reply = asyncio.run(run_shop_search("x", plan_fn=plan_fn, search_fn=search_fn, commute=commute))
     assert "train time" not in reply.answer.split(".")[0] and "couldn't find train times" in reply.answer
+
+
+def test_parser_first_judge_picks_and_no_browser(monkeypatch):
+    class NoBrowser:
+        def __init__(self, *a, **k):
+            raise AssertionError("parser worked, browser must not start")
+
+    async def fetch(key, keywords, max_price):
+        return [L(f"https://{key}.jp/game", 4000), L(f"https://{key}.jp/console", 30000),
+                L(f"https://{key}.jp/console2", 28000)]
+
+    async def branches(items):
+        return [i.model_copy(update={"branch_station": "大阪府吹田市1-1"}) for i in items]
+
+    async def commute(a, b):
+        return "20 min, direct, ¥200"
+
+    monkeypatch.setattr(shops_mod, "ChatSession", NoBrowser)
+    monkeypatch.setattr(shops_mod, "fetch_shop", fetch)
+    monkeypatch.setattr(shops_mod, "add_branches", branches)
+    monkeypatch.setattr(shops_mod, "lookup_commute", commute)
+    llm = FakeLLM({"keywords": "PS5", "max_price": 35000, "mode": "pickup", "home_station": "江坂",
+                   "chains": ["hardoff"]}, picks=[{"n": 3, "why": "本体"}, {"n": 2, "why": "本体"}, {"n": 99, "why": "x"}])
+    streamed = []
+    reply = asyncio.run(shops_mod.make_shop_search(llm, {})("PS5本体 near 江坂, no games", streamed.append))
+    assert [i.url for i in reply.listings] == ["https://hardoff.jp/console2", "https://hardoff.jp/console"]
+    assert reply.listings[0].why_matches.startswith("本体") and "20 min from 江坂" in reply.listings[0].why_matches
+    assert "PS5本体 near 江坂, no games" in llm.judged[0] and "1. ¥4000" in llm.judged[0]   # judge sees request + numbered titles
+    assert len(streamed) == 2
+
+
+def test_chain_without_parser_uses_browser(monkeypatch):
+    used = []
+
+    class Session:
+        def __init__(self, llm, **kw):
+            used.append(kw["allowed_sites"])
+        async def ask(self, text):
+            return Reply(answer="ok", listings=[])
+        async def close(self):
+            pass
+
+    async def fetch(*a):
+        raise AssertionError("2nd STREET has no parser")
+
+    monkeypatch.setattr(shops_mod, "ChatSession", Session)
+    monkeypatch.setattr(shops_mod, "fetch_shop", fetch)
+    asyncio.run(shops_mod.make_shop_search(FakeLLM({"keywords": "x", "chains": ["2ndstreet"]}), {})("x", lambda i: None))
+    assert used == [["*.2ndstreet.jp"]]

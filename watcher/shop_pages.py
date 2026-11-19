@@ -5,12 +5,30 @@ when a parser returns nothing for a query that should match, compare the page wi
 import asyncio
 import re
 from html import unescape
-from urllib.parse import urljoin
+from dataclasses import dataclass
+from urllib.parse import quote, urljoin
 
 import httpx
 
 from watcher.models import Listing
-from watcher.shops import CHAINS
+
+@dataclass(frozen=True)
+class Chain:
+    name: str
+    url: str   # search URL with {q}
+    site: str  # browser allowlist pattern
+
+    def search_url(self, keywords: str) -> str:
+        return self.url.format(q=quote(keywords))
+
+
+CHAINS = {
+    "hardoff": Chain("Hard Off", "https://netmall.hardoff.co.jp/search/?q={q}&exso=1", "*.hardoff.co.jp"),
+    "bookoff": Chain("BOOKOFF", "https://shopping.bookoff.co.jp/search/keyword/{q}", "*.bookoff.co.jp"),
+    "trefac": Chain("Treasure Factory", "https://ec.treasure-f.com/search?word={q}", "*.treasure-f.com"),
+    "2ndstreet": Chain("2nd STREET", "https://www.2ndstreet.jp/search?keyword={q}", "*.2ndstreet.jp"),
+}
+
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
 

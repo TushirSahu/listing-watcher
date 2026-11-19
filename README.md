@@ -48,8 +48,8 @@ plan ──► search each chain in parallel ──► merge ──► rank ─�
 ```
 
 - **plan:** one model call works out the item, budget, and whether you want it **shipped** or will **pick it up** (and from which station).
-- **search:** one browser agent per chain — Hard Off (オフモール), BOOKOFF, Treasure Factory (トレファク), 2nd STREET (best-effort; it blocks bots) — up to 3 at a time. Cards show the shop, branch and condition grade as they are found.
-- **rank:** shipped → price, then condition grade. Pick-up → train time from your station to each branch (Yahoo!乗換案内), then price.
+- **search:** Hard Off (オフモール), BOOKOFF and Treasure Factory (トレファク) are read straight from their search pages, and one model call picks the real matches (no games when you asked for the console, no ジャンク). That takes seconds. A browser agent is used only for 2nd STREET (best-effort; it blocks bots) or when a page can't be read. Cards show the shop, branch and condition grade.
+- **rank:** shipped → price, then condition grade. Pick-up → train time from your station to each branch's address (Yahoo!乗換案内), then price.
 
 Follow-up questions go to the normal single agent. Requests that name Mercari, Yahoo Auctions, Rakuma, Amazon or SUUMO skip the shop workflow.
 
