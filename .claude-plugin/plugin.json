@@ -1,6 +1,6 @@
 {
   "name": "thrift-scout",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Find used items at Japanese second-hand shop chains (Hard Off, BOOKOFF, Treasure Factory) and train times to their branches. No API key needed.",
   "author": {
     "name": "TushirSahu"
