@@ -15,6 +15,10 @@
   <a href="#standalone-app">Standalone app</a>
 </p>
 
+<p align="center">
+  <a href="https://m8ven.ai/mcp/tushirsahu-thrift-scout-jknc43?s=readme"><img src="https://m8ven.ai/badge/mcp/tushirsahu-thrift-scout-jknc43?v=607bebee6f1c4e6de1a78296132b980d" alt="M8ven Score"></a>
+</p>
+
 ---
 
 Thrift Scout is a [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin. Ask for something used in plain
